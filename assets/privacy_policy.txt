@@ -1,0 +1,48 @@
+POLITIQUE DE CONFIDENTIALITÉ
+
+Dernière mise à jour : août 2026
+
+1. INTRODUCTION
+Votre vie privée est importante pour nous. La présente Politique de confidentialité explique comment Muslim IA collecte, utilise, protège et partage vos informations lorsque vous utilisez notre application.
+
+2. DONNÉES QUE NOUS COLLECTONS
+- Données de compte : nom, adresse e-mail et mot de passe (crypté) nécessaires à la création et à la connexion de votre compte.
+- Données de progression : versets mémorisés, favoris, vocabulaire, exercices et statistiques d'apprentissage afin de personnaliser votre expérience.
+- Données d'utilisation : interactions avec les fonctionnalités de l'application.
+- Données techniques : informations sur votre appareil et la version de l'application, à des fins de compatibilité et de sécurité.
+- Transactions : les informations de paiement sont traitées par nos prestataires de paiement sécurisés ; nous ne stockons pas vos numéros de carte bancaire.
+
+3. UTILISATION DES DONNÉES
+Vos données sont utilisées pour :
+- Créer et gérer votre compte.
+- Fournir, personnaliser et améliorer nos services.
+- Assurer la sécurité et prévenir la fraude.
+- Vous notifier d'éventuelles mises à jour importantes.
+
+Nous ne vendons jamais vos données personnelles à des tiers.
+
+4. PARTAGE DES DONNÉES
+Vos données peuvent être partagées uniquement :
+- Avec les prestataires techniques indispensables au fonctionnement de l'application (hébergement, paiement, notifications), dans la limite du nécessaire.
+- Lorsque la loi l'exige ou pour protéger nos droits et notre sécurité.
+
+5. STOCKAGE ET SÉCURITÉ
+Vos données sont stockées sur des serveurs sécurisés. Nous mettons en œuvre des mesures techniques et organisationnelles appropriées pour protéger vos informations contre tout accès non autorisé, perte ou altération. Cependant, aucune transmission sur Internet n'est totalement sécurisée.
+
+6. DURÉE DE CONSERVATION
+Nous conservons vos données uniquement pendant la durée nécessaire à la fourniture des services ou la durée légale applicable. Vous pouvez demander la suppression de votre compte et de vos données à tout moment.
+
+7. VOS DROITS
+Vous disposez des droits suivants sur vos données :
+- Droit d'accès : connaître les données que nous détenons sur vous.
+- Droit de rectification : corriger des informations inexactes.
+- Droit d'opposition et de suppression : demander l'effacement de vos données.
+- Droit à la portabilité : récupérer vos données dans un format lisible.
+
+Pour exercer ces droits, contactez-nous via l'application ou à l'adresse indiquée ci-dessous.
+
+8. DONNÉES DES MINEURS
+L'application n'est pas destinée aux enfants de moins de 13 ans. Si nous apprenons qu'un compte a été créé par un enfant de moins de 13 ans sans accord parental, le compte sera supprimé.
+
+9. CONTACT
+Pour toute question relative à la présente Politique de confidentialité ou à l'exercice de vos droits, contactez-nous à l'adresse indiquée dans l'application.

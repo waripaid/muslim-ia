@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "1026983910139",
+    "project_id": "muslim-ia",
+    "storage_bucket": "muslim-ia.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:1026983910139:android:a4b1ab35eb737a00fe2e5e",
+        "android_client_info": {
+          "package_name": "com.muslim_ia.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAQdNPopOTOW5FdQRMiDXi1qQXpRa5hxZY"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

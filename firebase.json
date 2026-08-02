@@ -1,0 +1,19 @@
+{
+  "hosting": {
+    "public": "public",
+    "ignore": ["firebase.json", "**/.*", "**/node_modules/**"],
+    "headers": [
+      {
+        "source": "**/*.jpeg",
+        "headers": [{ "key": "Cache-Control", "value": "max-age=31536000" }]
+      },
+      {
+        "source": "/.well-known/assetlinks.json",
+        "headers": [{ "key": "Content-Type", "value": "application/json" }]
+      }
+    ]
+  },
+  "firestore": {
+    "indexes": "firestore.indexes.json"
+  }
+}
