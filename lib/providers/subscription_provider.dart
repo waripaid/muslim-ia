@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import '../services/api_service.dart';
 import '../services/storage_service.dart';
+import '../utils/admin.dart';
 import '../utils/logger.dart';
 import 'auth_provider.dart';
 
@@ -32,7 +33,7 @@ class SubscriptionProvider extends ChangeNotifier {
   }
 
   bool get isSubscribed => _isSubscribed || _trialActive;
-  bool get isPremium => _isSubscribed;
+  bool get isPremium => _isSubscribed || isAdminEmail(_auth.email);
   bool get trialActive => _trialActive;
   int get themeChangesLeft => 3 - _themeChanges;
   bool get canChangeTheme => _isSubscribed || _trialActive || _themeChanges < 3;

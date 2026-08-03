@@ -64,6 +64,19 @@ void main() async {
   final internetStatus = InternetStatusProvider();
   await internetStatus.init();
   final authProvider = AuthProvider(storage: storageService, api: apiService);
+  final chatProvider = ChatProvider(api: apiService, storage: storageService, internetStatus: internetStatus);
+
+  // Recharge les données de chat quand l'utilisateur change
+  // (connexion, déconnexion, changement de compte) : quota et conversations
+  // sont désormais stockés par utilisateur.
+  String? lastSyncedUserId;
+  authProvider.addListener(() {
+    final currentUserId = authProvider.userId;
+    if (currentUserId != lastSyncedUserId) {
+      lastSyncedUserId = currentUserId;
+      chatProvider.onUserChanged();
+    }
+  });
 
   runApp(
     MultiProvider(
@@ -78,7 +91,7 @@ void main() async {
           api: apiService,
           auth: authProvider,
         )),
-        ChangeNotifierProvider(create: (_) => ChatProvider(api: apiService, storage: storageService, internetStatus: internetStatus)),
+        ChangeNotifierProvider.value(value: chatProvider),
         Provider.value(value: apiService),
         Provider.value(value: storageService),
       ],

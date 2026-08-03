@@ -9,6 +9,7 @@ import '../services/api_service.dart';
 import '../services/storage_service.dart';
 import '../utils/logger.dart';
 import '../l10n/app_localizations.dart';
+import '../utils/admin.dart';
 import 'internet_status_provider.dart';
 
 enum ChatMode {
@@ -104,8 +105,6 @@ class ChatProvider extends ChangeNotifier {
   String? _activeConversationId;
   final InternetStatusProvider? internetStatus;
 
-  static const _keyActiveConv = 'active_conversation_id';
-
   ChatProvider({required ApiService api, required StorageService storage, InternetStatusProvider? internetStatus})
       : _api = api,
         _storage = storage,
@@ -114,13 +113,46 @@ class ChatProvider extends ChangeNotifier {
     _restoreLastSession();
   }
 
+  /// Identifiant stable du compte courant (Firebase uid, sinon compte local,
+  /// sinon invité) : les données de chat sont stockées PAR UTILISATEUR pour
+  /// éviter qu'un nouveau compte hérite de l'historique d'un autre.
+  String get _currentUserId {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user != null) return user.uid;
+    final authUser = _storage.prefs.getString('auth_user');
+    if (authUser != null) {
+      try {
+        final id = (jsonDecode(authUser) as Map)['id'];
+        if (id != null) return id.toString();
+      } catch (_) {}
+    }
+    return _storage.userId;
+  }
+
+  String? get _currentUserEmail {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user?.email != null) return user!.email;
+    final authUser = _storage.prefs.getString('auth_user');
+    if (authUser != null) {
+      try {
+        return (jsonDecode(authUser) as Map)['email']?.toString();
+      } catch (_) {}
+    }
+    return null;
+  }
+
+  /// Compte administrateur : tout est débloqué sans abonnement.
+  bool get isAdmin => isAdminEmail(_currentUserEmail);
+
+  String _k(String key) => '${_currentUserId}_$key';
+
   /// Abonnement PAYÉ (sans l'essai gratuit) : débloque les fonctionnalités media.
   set isPremium(bool value) {
     _isPremium = value;
     notifyListeners();
   }
 
-  bool get isPremium => _isPremium;
+  bool get isPremium => _isPremium || isAdmin;
 
   List<ChatMessage> get messages => _messages;
   bool get isLoading => _isLoading || _isSynthesizing;
@@ -128,12 +160,12 @@ class ChatProvider extends ChangeNotifier {
   ChatMode get currentMode => _currentMode;
   String? get error => _error;
   int get messagesSentToday => _messagesSentToday;
-  int get messagesLeft => _isPremium ? 999 : maxFreeMessages - _messagesSentToday;
-  bool get canSendMessage => _isPremium || _messagesSentToday < maxFreeMessages;
+  int get messagesLeft => isPremium ? 999 : maxFreeMessages - _messagesSentToday;
+  bool get canSendMessage => isPremium || _messagesSentToday < maxFreeMessages;
   String? get activeConversationId => _activeConversationId;
 
   void _loadMessageCount() {
-    final stored = _storage.prefs.getString('msg_count');
+    final stored = _storage.prefs.getString(_k('msg_count'));
     if (stored != null) {
       try {
         final trimmed = stored.trim();
@@ -148,8 +180,8 @@ class ChatProvider extends ChangeNotifier {
   }
 
   void _restoreLastSession() {
-    _activeConversationId = _storage.prefs.getString(_keyActiveConv);
-    final history = _storage.history;
+    _activeConversationId = _storage.prefs.getString(_k('active_conversation_id'));
+    final history = _storage.prefs.getStringList(_k('chat_history')) ?? [];
     if (history.isEmpty) return;
     for (final s in history) {
       try {
@@ -162,20 +194,34 @@ class ChatProvider extends ChangeNotifier {
       _isLoading = false;
       _error = null;
     }
-    AppLogger.info('Chat', 'Session restaurée: ${_messages.length} messages (activeId=$_activeConversationId)');
+    AppLogger.info('Chat', 'Session restaurée: ${_messages.length} messages (activeId=$_activeConversationId, user=$_currentUserId)');
+  }
+
+  /// Appelé quand l'utilisateur change (connexion/déconnexion) : purge la
+  /// mémoire et recharge les données du compte courant.
+  void onUserChanged() {
+    _messages.clear();
+    _activeConversationId = null;
+    _messagesSentToday = 0;
+    _isLoading = false;
+    _error = null;
+    _loadMessageCount();
+    _restoreLastSession();
+    notifyListeners();
+    AppLogger.info('Chat', 'Changement d\'utilisateur: données rechargées pour user=$_currentUserId');
   }
 
   void _persistActiveConversationId(String? id) {
     if (id == null) {
-      _storage.prefs.remove(_keyActiveConv);
+      _storage.prefs.remove(_k('active_conversation_id'));
     } else {
-      _storage.prefs.setString(_keyActiveConv, id);
+      _storage.prefs.setString(_k('active_conversation_id'), id);
     }
   }
 
   void _incrementMessageCount() {
     _messagesSentToday++;
-    _storage.prefs.setString('msg_count', '$_messagesSentToday');
+    _storage.prefs.setString(_k('msg_count'), '$_messagesSentToday');
     notifyListeners();
   }
 
@@ -610,7 +656,7 @@ ${_buildInstructions(lang)}''';
   }
 
   /// Sauvegarde/mise à jour d'un message dans l'historique local (sans doublon)
-  void _upsertHistory(ChatMessage msg) {    final history = _storage.history;
+  void _upsertHistory(ChatMessage msg) {    final history = _storage.prefs.getStringList(_k('chat_history')) ?? [];
     final updated = history.where((s) {
       try {
         final parsed = jsonDecode(s) as Map;
@@ -620,7 +666,7 @@ ${_buildInstructions(lang)}''';
       }
     }).toList();
     updated.add(jsonEncode(msg.toJson()));
-    _storage.prefs.setStringList('chat_history', updated);
+    _storage.prefs.setStringList(_k('chat_history'), updated);
   }
 
   void clearMessages() {
@@ -630,7 +676,7 @@ ${_buildInstructions(lang)}''';
     _messages.clear();
     _activeConversationId = null;
     _persistActiveConversationId(null);
-    _storage.clearHistory();
+    _storage.prefs.remove(_k('chat_history'));
     notifyListeners();
   }
 
@@ -654,13 +700,13 @@ ${_buildInstructions(lang)}''';
           : _messages.last.content,
       'messages': _messages.map((m) => jsonEncode(m.toJson())).toList(),
     };
-    final saved = _storage.prefs.getStringList('conversations') ?? [];
+    final saved = _storage.prefs.getStringList(_k('conversations')) ?? [];
     saved.removeWhere((s) {
       try { return (jsonDecode(s) as Map)['id'] == id; } catch (_) { return false; }
     });
     saved.insert(0, jsonEncode(conversation));
     if (saved.length > 50) saved.removeRange(50, saved.length);
-    _storage.prefs.setStringList('conversations', saved);
+    _storage.prefs.setStringList(_k('conversations'), saved);
 
     // Sync to Firestore
     try {
@@ -676,7 +722,7 @@ ${_buildInstructions(lang)}''';
 
   /// Charge une conversation sauvegardée dans le chat courant
   void loadConversation(String id) {
-    final saved = _storage.prefs.getStringList('conversations') ?? [];
+    final saved = _storage.prefs.getStringList(_k('conversations')) ?? [];
     for (final s in saved) {
       try {
         final c = jsonDecode(s) as Map<String, dynamic>;
@@ -689,7 +735,7 @@ ${_buildInstructions(lang)}''';
           _messages
             ..clear()
             ..addAll(msgs.map((m) => ChatMessage.fromJson(jsonDecode(m as String))));
-          _storage.prefs.setStringList('chat_history', msgs.cast<String>());
+          _storage.prefs.setStringList(_k('chat_history'), msgs.cast<String>());
           _isLoading = false;
           _error = null;
           _activeConversationId = id;
@@ -715,7 +761,7 @@ ${_buildInstructions(lang)}''';
     final removed = _messages.length - idx;
     _messages.removeRange(idx, _messages.length);
     _storage.prefs.setStringList(
-      'chat_history',
+      _k('chat_history'),
       _messages.map((m) => jsonEncode(m.toJson())).toList(),
     );
     notifyListeners();
@@ -724,7 +770,7 @@ ${_buildInstructions(lang)}''';
   }
 
   List<Map<String, dynamic>> getSavedConversations() {
-    final saved = _storage.prefs.getStringList('conversations') ?? [];
+    final saved = _storage.prefs.getStringList(_k('conversations')) ?? [];
     return saved
         .map((s) {
           try {
@@ -739,16 +785,16 @@ ${_buildInstructions(lang)}''';
   }
 
   void deleteConversation(String id) {
-    final saved = _storage.prefs.getStringList('conversations') ?? [];
+    final saved = _storage.prefs.getStringList(_k('conversations')) ?? [];
     saved.removeWhere((s) {
       try { return (jsonDecode(s) as Map)['id'] == id; } catch (_) { return false; }
     });
-    _storage.prefs.setStringList('conversations', saved);
+    _storage.prefs.setStringList(_k('conversations'), saved);
     notifyListeners();
   }
 
   void deleteAllConversations() {
-    _storage.prefs.remove('conversations');
+    _storage.prefs.remove(_k('conversations'));
     notifyListeners();
   }
 }
