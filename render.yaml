@@ -1,6 +1,11 @@
 # Render Blueprint — déploiement du backend Muslim IA.
 # Le service se trouve dans /server (rootDir). Rendu à la racine du dépôt
 # pour que Render le découvre automatiquement (New + Blueprint).
+#
+# Valeurs NON secrètes : définies directement ici (appliquées automatiquement).
+# Secrets (clés API, JSON Firebase) : `sync: false` → à saisir une seule fois
+# dans le dashboard Render (onglet Environment). C'est la seule façon pour une
+# plateforme comme Render de gérer des secrets sans les commiter dans le repo.
 services:
   - type: web
     name: muslim-ia-api
@@ -19,35 +24,35 @@ services:
         value: 2
       - key: TRUST_PROXY
         value: true
-      - key: MISTRAL_API_KEY
-        sync: false # renseigner dans le dashboard Render
-      - key: GROQ_API_KEY
-        sync: false
-      - key: TRYIA_API_URL
-        sync: false
+
+      # ---- valeurs automatiques (non sensibles) ----
       - key: FIREBASE_PROJECT_ID
+        value: muslim-ia
+      - key: PUBLIC_LOGO_URL
+        value: https://muslim-ia.web.app/muslimia-logo.jpeg
+      - key: AUTH_CONTINUE_URL
+        value: https://muslim-ia.firebaseapp.com/verify
+      - key: GENIUSPAY_BASE_URL
+        value: https://pay.genius.ci/api/v1/merchant
+      - key: PAYMENT_SUCCESS_URL
+        value: https://muslim-ia.web.app/payment/success
+      - key: PAYMENT_ERROR_URL
+        value: https://muslim-ia.web.app/payment/error
+      - key: BREVO_SENDER_NAME
+        value: Muslim IA
+      # TRYIA_API_URL: laisser vide — l'agent local est inaccessible depuis
+      # Render et le serveur bascule automatiquement sur Mistral direct.
+
+      # ---- secrets à saisir une fois dans le dashboard Render ----
+      - key: MISTRAL_API_KEY
+        sync: false
+      - key: GROQ_API_KEY
         sync: false
       - key: FIREBASE_SERVICE_ACCOUNT
         sync: false # contenu JSON complet du compte de service Firebase
       - key: BREVO_API_KEY
-        sync: false
-      - key: BREVO_SENDER_NAME
-        sync: false
-      - key: BREVO_SENDER_EMAIL
-        sync: false
-      - key: PUBLIC_LOGO_URL
-        sync: false
-      - key: AUTH_CONTINUE_URL
-        sync: false
-      - key: MISTRAL_VOICE_ID
-        sync: false
+        sync: false # optionnel (sinon fallback Firebase pour les emails)
       - key: GENIUSPAY_API_KEY
         sync: false
       - key: GENIUSPAY_API_SECRET
-        sync: false
-      - key: GENIUSPAY_BASE_URL
-        sync: false
-      - key: PAYMENT_SUCCESS_URL
-        sync: false
-      - key: PAYMENT_ERROR_URL
         sync: false
