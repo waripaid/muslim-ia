@@ -1,5 +1,6 @@
 # Render Blueprint — déploiement du backend Muslim IA.
-# Utilise : New + Web Service (ou Blueprint). Le service se trouve dans /server.
+# Le service se trouve dans /server (rootDir). Rendu à la racine du dépôt
+# pour que Render le découvre automatiquement (New + Blueprint).
 services:
   - type: web
     name: muslim-ia-api

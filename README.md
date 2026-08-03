@@ -17,8 +17,8 @@ Application Flutter (Android/iOS) avec backend Node.js (Express). Apprentissage 
 │   │   ├── routes/       # ask, auth, audio, vision, progress, user
 │   │   ├── services/     # mistral, mcp_quran, firebase, email…
 │   │   └── middleware/   # rate limiting, auth
-│   ├── render.yaml       # Déploiement Render (Blueprint)
 │   └── .env.example      # Variables d'environnement (copier vers .env)
+├── render.yaml            # Déploiement Render (Blueprint, à la racine)
 ├── assets/               # Logo, Conditions d'utilisation, Politique de confidentialité
 └── firestore.indexes.json
 ```
@@ -88,7 +88,7 @@ flutter build appbundle --release \
 ### Déploiement sur Render
 
 1. Poussez le dépôt sur GitHub.
-2. Dans Render : **New + Blueprint** et sélectionnez le dépôt. Le fichier `server/render.yaml` configure le service.
+2. Dans Render : **New + Blueprint** et sélectionnez le dépôt. Le fichier `render.yaml` (à la racine) configure le service.
 3. Renseignez les variables d'environnement secrètes dans le dashboard Render :
    - `MISTRAL_API_KEY`, `GROQ_API_KEY`, `TRYIA_API_URL`
    - `FIREBASE_PROJECT_ID` et `FIREBASE_SERVICE_ACCOUNT` (contenu JSON complet du compte de service Firebase)
