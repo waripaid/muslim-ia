@@ -1,0 +1,42 @@
+# Render Blueprint — déploiement du backend Muslim IA.
+# Utilise : New + Web Service (ou Blueprint). Le service se trouve dans /server.
+services:
+  - type: web
+    name: muslim-ia-api
+    runtime: node
+    rootDir: server
+    buildCommand: npm install
+    startCommand: npm start
+    healthCheckPath: /health
+    plan: free
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 10000
+      - key: WEB_CONCURRENCY
+        value: 2
+      - key: TRUST_PROXY
+        value: true
+      - key: MISTRAL_API_KEY
+        sync: false # renseigner dans le dashboard Render
+      - key: GROQ_API_KEY
+        sync: false
+      - key: TRYIA_API_URL
+        sync: false
+      - key: FIREBASE_PROJECT_ID
+        sync: false
+      - key: FIREBASE_SERVICE_ACCOUNT
+        sync: false # contenu JSON complet du compte de service Firebase
+      - key: BREVO_API_KEY
+        sync: false
+      - key: BREVO_SENDER_NAME
+        sync: false
+      - key: BREVO_SENDER_EMAIL
+        sync: false
+      - key: PUBLIC_LOGO_URL
+        sync: false
+      - key: AUTH_CONTINUE_URL
+        sync: false
+      - key: MISTRAL_VOICE_ID
+        sync: false

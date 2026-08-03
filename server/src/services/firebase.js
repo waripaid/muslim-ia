@@ -14,10 +14,19 @@ function initFirebase() {
   }
 
   const keyPath = process.env.GOOGLE_APPLICATION_CREDENTIALS;
+  const serviceAccountJson = process.env.FIREBASE_SERVICE_ACCOUNT;
   const projectId = process.env.FIREBASE_PROJECT_ID;
 
   try {
-    if (keyPath) {
+    if (serviceAccountJson) {
+      // Préféré pour les plateformes d'hébergement (Render, Vercel…) :
+      // le contenu complet du fichier de compte de service dans une variable d'environnement.
+      const serviceAccount = JSON.parse(serviceAccountJson);
+      firebaseApp = admin.initializeApp({
+        credential: admin.credential.cert(serviceAccount),
+        projectId: projectId || serviceAccount.project_id,
+      });
+    } else if (keyPath) {
       const path = require('path');
       const resolvedKeyPath = path.isAbsolute(keyPath)
         ? keyPath
