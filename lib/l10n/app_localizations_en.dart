@@ -139,8 +139,18 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String chatLimitBody(Object count) {
-    return 'You have sent $count messages today.\n\nCome back tomorrow to keep chatting for free, or subscribe for unlimited access.';
+    return 'You\'ve reached your limit of $count free messages.\n\nSubscribe to keep chatting without limits.';
   }
+
+  @override
+  String get subscribe => 'Subscribe';
+
+  @override
+  String get premiumFeatureTitle => 'Premium feature';
+
+  @override
+  String get premiumFeatureBody =>
+      'This feature is reserved for Premium subscribers. Subscribe to unlock it and enjoy unlimited messages.';
 
   @override
   String get chatRecording => 'Recording...';
@@ -409,7 +419,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String profileToday(Object left, Object total) {
-    return '$left / $total today';
+    return '$left / $total messages left';
   }
 
   @override

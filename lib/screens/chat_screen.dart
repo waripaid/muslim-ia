@@ -17,6 +17,7 @@ import '../models/chat_message.dart';
 import '../providers/chat_provider.dart';
 import '../providers/internet_status_provider.dart';
 import '../providers/memory_provider.dart';
+import '../screens/paywall_screen.dart';
 import '../services/api_service.dart';
 import '../utils/logger.dart';
 import '../widgets/chat_bubble.dart';
@@ -41,6 +42,7 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
   late final AnimationController _pulse;
   final _audioRecorder = FlutterSoundRecorder();
   final _tts = FlutterTts();
+  ChatProvider? _chat;
   bool _showFab = false;
   int _lastMsgCount = 0;
   bool _isRecording = false;
@@ -60,14 +62,15 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
       final show = _scrollCtrl.hasClients && _scrollCtrl.offset >= 200;
       if (show != _showFab) setState(() => _showFab = show);
     });
-    context.read<ChatProvider>().addListener(_onChatChanged);
+    _chat = context.read<ChatProvider>();
+    _chat!.addListener(_onChatChanged);
     _initAudio();
     _initTts();
   }
 
   @override
   void dispose() {
-    context.read<ChatProvider>().removeListener(_onChatChanged);
+    _chat?.removeListener(_onChatChanged);
     _tts.stop();
     _ctrl.dispose(); _scrollCtrl.dispose(); _focus.dispose(); _pulse.dispose();
     _audioRecorder.closeRecorder();
@@ -157,9 +160,21 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
     final chat = context.read<ChatProvider>();
     if (chat.isLoading) return;
 
+    if (hasImage && !chat.isSubscribed) {
+      AppLogger.warn('ChatScreen', 'Envoi d\'image réservé aux abonnés');
+      _showSubscriptionDialog(
+        title: AppLocalizations.of(context).premiumFeatureTitle,
+        message: AppLocalizations.of(context).premiumFeatureBody,
+      );
+      return;
+    }
+
     if (!chat.canSendMessage) {
       AppLogger.warn('ChatScreen', 'Limite de messages atteinte');
-      _showLimitDialog();
+      _showSubscriptionDialog(
+        title: AppLocalizations.of(context).chatLimitTitle,
+        message: AppLocalizations.of(context).chatLimitBody(ChatProvider.maxFreeMessages),
+      );
       return;
     }
 
@@ -194,23 +209,68 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
     _focus.requestFocus();
   }
 
-  void _showLimitDialog() {
+  void _requirePremium(ChatProvider chat, VoidCallback action) {
+    if (chat.isSubscribed) {
+      action();
+      return;
+    }
+    AppLogger.warn('ChatScreen', 'Fonctionnalité réservée aux abonnés');
+    _showSubscriptionDialog(
+      title: AppLocalizations.of(context).premiumFeatureTitle,
+      message: AppLocalizations.of(context).premiumFeatureBody,
+    );
+  }
+
+  void _showSubscriptionDialog({required String title, required String message}) {
     final l10n = AppLocalizations.of(context);
-    AppLogger.warn('ChatScreen', 'Dialogue limite affiché');
+    final colors = ThemeColors.of(context);
+    AppLogger.warn('ChatScreen', 'Dialogue abonnement affiché');
     showDialog(
       context: context,
-      builder: (ctx) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: Text(l10n.chatLimitTitle),
-        content: Text(l10n.chatLimitBody(ChatProvider.maxFreeMessages)),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: Text(l10n.later)),
-          ElevatedButton(
-            onPressed: () => Navigator.pop(ctx),
-            style: ElevatedButton.styleFrom(backgroundColor: AppColors.accent),
-            child: Text(l10n.ok),
+      builder: (ctx) => Dialog(
+        backgroundColor: colors.surface,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(24, 28, 24, 16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 68, height: 68,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  gradient: AppGradients.gold,
+                  boxShadow: [BoxShadow(color: AppColors.accent.withValues(alpha: 0.4), blurRadius: 18, offset: const Offset(0, 6))],
+                ),
+                child: const Icon(Icons.diamond_rounded, size: 30, color: Color(0xFF0F1B4C)),
+              ),
+              const SizedBox(height: 16),
+              Text(title, textAlign: TextAlign.center, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: AppColors.textPrimary)),
+              const SizedBox(height: 10),
+              Text(message, textAlign: TextAlign.center, style: TextStyle(fontSize: 14, height: 1.5, color: AppColors.textSecondary)),
+              const SizedBox(height: 20),
+              SizedBox(
+                width: double.infinity, height: 46,
+                child: ElevatedButton(
+                  onPressed: () {
+                    Navigator.pop(ctx);
+                    Navigator.push(context, MaterialPageRoute(builder: (_) => const PaywallScreen()));
+                  },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.accent,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                  ),
+                  child: Text(l10n.subscribe, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: Color(0xFF0F1B4C))),
+                ),
+              ),
+              TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                style: TextButton.styleFrom(foregroundColor: AppColors.textLight),
+                child: Text(l10n.later),
+              ),
+            ],
           ),
-        ],
+        ),
       ),
     );
   }
@@ -653,6 +713,11 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
   }
 
   Future<void> _onRecordStart() async {
+    final chat = context.read<ChatProvider>();
+    if (!chat.isSubscribed) {
+      _requirePremium(chat, () {});
+      return;
+    }
     _tts.stop();
     try {
       final mic = Permission.microphone;
@@ -1008,6 +1073,7 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
   void _showAttachSheet() {
     final l10n = AppLocalizations.of(context);
     final colors = ThemeColors.of(context);
+    final chat = context.read<ChatProvider>();
     showModalBottomSheet(
       context: context,
       backgroundColor: colors.surface,
@@ -1033,16 +1099,18 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
             const SizedBox(height: 8),
             _attachTile(ctx, Icons.photo_library_rounded, l10n.chatChooseImage, () {
               Navigator.pop(ctx);
-              _pickImage();
+              _requirePremium(chat, _pickImage);
             }),
             _attachTile(ctx, Icons.photo_camera_rounded, l10n.chatTakePhoto, () {
               Navigator.pop(ctx);
-              _takePhoto();
+              _requirePremium(chat, _takePhoto);
             }),
             _attachTile(ctx, Icons.mic_rounded, l10n.chatAudioTranscription, () {
               Navigator.pop(ctx);
-              setState(() => _audioTranscriptionMode = true);
-              _focus.requestFocus();
+              _requirePremium(chat, () {
+                setState(() => _audioTranscriptionMode = true);
+                _focus.requestFocus();
+              });
             }),
             const SizedBox(height: 12),
           ],

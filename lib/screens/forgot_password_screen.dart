@@ -86,7 +86,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
     final l10n = AppLocalizations.of(context);
 
     return Scaffold(
-      backgroundColor: Colors.transparent,
+      backgroundColor: const Color(0xFF0F1B4C),
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
@@ -98,6 +98,8 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
       ),
       extendBodyBehindAppBar: true,
       body: Container(
+        width: double.infinity,
+        height: double.infinity,
         decoration: const BoxDecoration(
           gradient: LinearGradient(
             begin: Alignment.topCenter,

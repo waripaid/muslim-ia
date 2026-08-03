@@ -140,8 +140,18 @@ class AppLocalizationsRu extends AppLocalizations {
 
   @override
   String chatLimitBody(Object count) {
-    return 'Вы отправили $count сообщений сегодня.\n\nВозвращайтесь завтра, чтобы продолжить общение бесплатно, или оформите подписку для неограниченного доступа.';
+    return 'Вы достигли лимита из $count бесплатных сообщений.\n\nПодпишитесь, чтобы продолжать общение без ограничений.';
   }
+
+  @override
+  String get subscribe => 'Подписаться';
+
+  @override
+  String get premiumFeatureTitle => 'Премиум-функция';
+
+  @override
+  String get premiumFeatureBody =>
+      'Эта функция доступна подписчикам Premium. Подпишитесь, чтобы открыть её и пользоваться безлимитными сообщениями.';
 
   @override
   String get chatRecording => 'Запись...';
@@ -412,7 +422,7 @@ class AppLocalizationsRu extends AppLocalizations {
 
   @override
   String profileToday(Object left, Object total) {
-    return '$left / $total сегодня';
+    return '$left / $total сообщений осталось';
   }
 
   @override

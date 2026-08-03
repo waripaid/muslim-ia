@@ -115,6 +115,8 @@ class ChatProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  bool get isSubscribed => _isSubscribed;
+
   List<ChatMessage> get messages => _messages;
   bool get isLoading => _isLoading || _isSynthesizing;
   bool get isSynthesizing => _isSynthesizing;
@@ -125,22 +127,23 @@ class ChatProvider extends ChangeNotifier {
   bool get canSendMessage => _isSubscribed || _messagesSentToday < maxFreeMessages;
 
   void _loadMessageCount() {
-    final today = DateTime.now().toIso8601String().substring(0, 10);
     final stored = _storage.prefs.getString('msg_count');
     if (stored != null) {
       try {
-        final data = jsonDecode(stored);
-        if (data['date'] == today) {
+        final trimmed = stored.trim();
+        if (trimmed.startsWith('{')) {
+          final data = jsonDecode(trimmed);
           _messagesSentToday = data['count'] ?? 0;
+        } else {
+          _messagesSentToday = int.parse(trimmed);
         }
       } catch (_) {}
     }
   }
 
   void _incrementMessageCount() {
-    final today = DateTime.now().toIso8601String().substring(0, 10);
     _messagesSentToday++;
-    _storage.prefs.setString('msg_count', jsonEncode({'date': today, 'count': _messagesSentToday}));
+    _storage.prefs.setString('msg_count', '$_messagesSentToday');
     notifyListeners();
   }
 
@@ -224,6 +227,7 @@ class ChatProvider extends ChangeNotifier {
   }
 
   Future<void> sendImage(String imagePath, {String message = ''}) async {
+    if (!canSendMessage) return;
     AppLogger.start('Chat', 'sendImage: traitement de l\'image...');
     _isLoading = true;
     _error = null;
@@ -336,6 +340,7 @@ $confidentiality''';
   /// (la transcription se fait ensuite en arrière-plan). Retourne l'id du message.
   String sendVoice(String audioPath) {
     if (audioPath.isEmpty) return '';
+    if (!canSendMessage) return '';
     final userMessage = ChatMessage(
       id: DateTime.now().millisecondsSinceEpoch.toString(),
       content: '',

@@ -22,6 +22,7 @@ import 'screens/forgot_password_screen.dart';
 import 'screens/login_screen.dart';
 import 'screens/paywall_screen.dart';
 import 'screens/profile_screen.dart';
+import 'screens/splash_screen.dart';
 import 'utils/logger.dart';
 import 'utils/validators.dart';
 
@@ -97,6 +98,7 @@ class _MuslimIAAppState extends State<MuslimIAApp> {
   final GlobalKey<ScaffoldMessengerState> _scaffoldMessengerKey =
       GlobalKey<ScaffoldMessengerState>();
   StreamSubscription<String>? _linkSub;
+  bool _showSplash = true;
 
   @override
   void initState() {
@@ -108,6 +110,10 @@ class _MuslimIAAppState extends State<MuslimIAApp> {
         _handleLink(initial);
       }
     });
+  }
+
+  void _onSplashFinished() {
+    if (mounted) setState(() => _showSplash = false);
   }
 
   @override
@@ -142,11 +148,21 @@ class _MuslimIAAppState extends State<MuslimIAApp> {
       locale: lang.locale,
       supportedLocales: LanguageProvider.supportedLocales,
       localizationsDelegates: AppLocalizations.localizationsDelegates,
-      home: auth.isLoggedIn
-          ? const ChatShell()
-          : auth.state == AuthState.emailVerification
-              ? const _EmailVerificationScreen()
-              : const _LoginShell(),
+      home: AnimatedSwitcher(
+        duration: const Duration(milliseconds: 700),
+        switchInCurve: Curves.easeOut,
+        switchOutCurve: Curves.easeIn,
+        child: _showSplash
+            ? SplashScreen(key: const ValueKey('splash'), onFinished: _onSplashFinished)
+            : KeyedSubtree(
+                key: const ValueKey('home'),
+                child: auth.isLoggedIn
+                    ? const ChatShell()
+                    : auth.state == AuthState.emailVerification
+                        ? const _EmailVerificationScreen()
+                        : const _LoginShell(),
+              ),
+      ),
       builder: (context, child) {
         // Garde la disposition des éléments en LTR même en arabe (texte arabe rendu par bidi)
         return Directionality(
@@ -301,6 +317,7 @@ class _QuickLoginState extends State<_QuickLogin> {
   String? _error;
   bool _loading = false;
   String? _emailError, _passError;
+  AuthProvider? _auth;
 
   @override
   void initState() {
@@ -308,14 +325,15 @@ class _QuickLoginState extends State<_QuickLogin> {
     _email.addListener(_onChanged);
     _pass.addListener(_onChanged);
     // Auto-redirect if login succeeds
-    context.read<AuthProvider>().addListener(_onAuthChange);
+    _auth = context.read<AuthProvider>();
+    _auth!.addListener(_onAuthChange);
   }
 
   void _onChanged() => setState(() {});
 
   @override
   void dispose() {
-    context.read<AuthProvider>().removeListener(_onAuthChange);
+    _auth?.removeListener(_onAuthChange);
     _email.dispose(); _pass.dispose(); super.dispose();
   }
 
@@ -529,20 +547,22 @@ class _QuickRegisterState extends State<_QuickRegister> {
   String? _error;
   bool _loading = false;
   String? _nameError, _emailError, _passError, _confirmError;
+  AuthProvider? _auth;
 
   @override
   void initState() {
     super.initState();
     _pass.addListener(_onChanged);
     _confirm.addListener(_onChanged);
-    context.read<AuthProvider>().addListener(_onAuthChange);
+    _auth = context.read<AuthProvider>();
+    _auth!.addListener(_onAuthChange);
   }
 
   void _onChanged() => setState(() {});
 
   @override
   void dispose() {
-    context.read<AuthProvider>().removeListener(_onAuthChange);
+    _auth?.removeListener(_onAuthChange);
     _name.dispose(); _email.dispose(); _pass.dispose(); _confirm.dispose(); super.dispose();
   }
 

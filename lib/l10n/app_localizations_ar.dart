@@ -138,8 +138,18 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String chatLimitBody(Object count) {
-    return 'أرسلت $count رسائل اليوم.\n\nعد غداً لمواصلة الدردشة مجاناً، أو اشترك للحصول على وصول غير محدود.';
+    return 'لقد وصلت إلى الحد الأقصى وهو $count رسائل مجانية.\n\nاشترك لمتابعة الدردشة بدون حدود.';
   }
+
+  @override
+  String get subscribe => 'اشترك';
+
+  @override
+  String get premiumFeatureTitle => 'ميزة بريميوم';
+
+  @override
+  String get premiumFeatureBody =>
+      'هذه الميزة متاحة للمشتركين في بريميوم. اشترك لفتحها والاستمتاع برسائل غير محدودة.';
 
   @override
   String get chatRecording => 'جاري التسجيل...';
@@ -407,7 +417,7 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String profileToday(Object left, Object total) {
-    return '$left / $total اليوم';
+    return 'الرسائل المتبقية $left / $total';
   }
 
   @override

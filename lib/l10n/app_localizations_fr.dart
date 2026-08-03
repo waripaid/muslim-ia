@@ -141,8 +141,18 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String chatLimitBody(Object count) {
-    return 'Vous avez envoyé $count messages aujourd\'hui.\n\nRevenez demain pour continuer à discuter gratuitement, ou abonnez-vous pour un accès illimité.';
+    return 'Vous avez atteint votre limite de $count messages gratuits.\n\nAbonnez-vous pour continuer à discuter sans limite.';
   }
+
+  @override
+  String get subscribe => 'S\'abonner';
+
+  @override
+  String get premiumFeatureTitle => 'Fonctionnalité Premium';
+
+  @override
+  String get premiumFeatureBody =>
+      'Cette fonctionnalité est réservée aux abonnés Premium. Abonnez-vous pour y accéder et profiter de messages illimités.';
 
   @override
   String get chatRecording => 'Enregistrement...';
@@ -412,7 +422,7 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String profileToday(Object left, Object total) {
-    return '$left / $total aujourd\'hui';
+    return '$left / $total messages restants';
   }
 
   @override

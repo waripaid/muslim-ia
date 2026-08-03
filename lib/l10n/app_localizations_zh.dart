@@ -138,8 +138,17 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String chatLimitBody(Object count) {
-    return '您今天已发送$count条消息。\n\n明天再来免费畅聊，或订阅解锁无限对话。';
+    return '您已达到$count条免费消息的上限。\n\n订阅后即可无限畅聊。';
   }
+
+  @override
+  String get subscribe => '订阅';
+
+  @override
+  String get premiumFeatureTitle => '高级功能';
+
+  @override
+  String get premiumFeatureBody => '此功能仅供高级订阅者使用。订阅即可解锁并享受无限消息。';
 
   @override
   String get chatRecording => '录音中...';
@@ -402,7 +411,7 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String profileToday(Object left, Object total) {
-    return '今日 $left / $total';
+    return '剩余 $left / $total 条消息';
   }
 
   @override

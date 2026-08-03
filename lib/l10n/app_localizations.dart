@@ -363,8 +363,26 @@ abstract class AppLocalizations {
   /// No description provided for @chatLimitBody.
   ///
   /// In fr, this message translates to:
-  /// **'Vous avez envoyé {count} messages aujourd\'hui.\n\nRevenez demain pour continuer à discuter gratuitement, ou abonnez-vous pour un accès illimité.'**
+  /// **'Vous avez atteint votre limite de {count} messages gratuits.\n\nAbonnez-vous pour continuer à discuter sans limite.'**
   String chatLimitBody(Object count);
+
+  /// No description provided for @subscribe.
+  ///
+  /// In fr, this message translates to:
+  /// **'S\'abonner'**
+  String get subscribe;
+
+  /// No description provided for @premiumFeatureTitle.
+  ///
+  /// In fr, this message translates to:
+  /// **'Fonctionnalité Premium'**
+  String get premiumFeatureTitle;
+
+  /// No description provided for @premiumFeatureBody.
+  ///
+  /// In fr, this message translates to:
+  /// **'Cette fonctionnalité est réservée aux abonnés Premium. Abonnez-vous pour y accéder et profiter de messages illimités.'**
+  String get premiumFeatureBody;
 
   /// No description provided for @chatRecording.
   ///
@@ -867,7 +885,7 @@ abstract class AppLocalizations {
   /// No description provided for @profileToday.
   ///
   /// In fr, this message translates to:
-  /// **'{left} / {total} aujourd\'hui'**
+  /// **'{left} / {total} messages restants'**
   String profileToday(Object left, Object total);
 
   /// No description provided for @profileSubscription.
