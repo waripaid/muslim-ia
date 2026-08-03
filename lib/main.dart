@@ -2,11 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
-import 'package:geniuspay_flutter/geniuspay_flutter.dart';
 
 import 'dart:async';
 
-import 'config/env.dart';
 import 'config/theme.dart';
 import 'l10n/app_localizations.dart';
 import 'providers/app_state_provider.dart';
@@ -54,35 +52,30 @@ void main() async {
     AppLogger.warn('App', 'Firebase/FCM non disponible: $e');
   }
 
-  // Initialize GeniusPay
-  AppLogger.start('GeniusPay', 'Initialisation...');
-  try {
-    GeniusPay.initialize(GeniusPayConfig(
-      apiKey: Env.geniusPayApiKey,
-      apiSecret: Env.geniusPayApiSecret,
-      baseUrl: Env.geniusPayBaseUrl,
-      sandbox: Env.geniusPaySandbox,
-    ));
-    AppLogger.success('GeniusPay', 'Initialisé: sandbox=${GeniusPay.isSandbox}, baseUrl=${GeniusPay.config.baseUrl}');
-  } catch (e) {
-    AppLogger.error('GeniusPay', 'Échec de l\'initialisation', e);
-  }
+  // GeniusPay n'est plus initialisé côté client : le secret ne circule plus
+  // dans l'app. La création/vérification du paiement passe par le backend
+  // (/api/payments/*), qui détient les clés merchant.
 
   final storageService = StorageService();
   await storageService.init();
   final apiService = ApiService();
   final internetStatus = InternetStatusProvider();
   await internetStatus.init();
+  final authProvider = AuthProvider(storage: storageService, api: apiService);
 
   runApp(
     MultiProvider(
       providers: [
         ChangeNotifierProvider.value(value: internetStatus),
         ChangeNotifierProvider(create: (_) => AppStateProvider(storage: storageService)),
-        ChangeNotifierProvider(create: (_) => AuthProvider(storage: storageService, api: apiService)),
+        ChangeNotifierProvider.value(value: authProvider),
         ChangeNotifierProvider(create: (_) => LanguageProvider(prefs: storageService.prefs)),
         ChangeNotifierProvider(create: (_) => MemoryProvider(storage: storageService)),
-        ChangeNotifierProvider(create: (_) => SubscriptionProvider(storage: storageService)),
+        ChangeNotifierProvider(create: (_) => SubscriptionProvider(
+          storage: storageService,
+          api: apiService,
+          auth: authProvider,
+        )),
         ChangeNotifierProvider(create: (_) => ChatProvider(api: apiService, storage: storageService, internetStatus: internetStatus)),
         Provider.value(value: apiService),
         Provider.value(value: storageService),

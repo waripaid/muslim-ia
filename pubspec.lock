@@ -381,14 +381,6 @@ packages:
     description: flutter
     source: sdk
     version: "0.0.0"
-  geniuspay_flutter:
-    dependency: "direct main"
-    description:
-      name: geniuspay_flutter
-      sha256: b487a67f8319833e9b64bb00d0a006b4d7c2cc49ceffd083710e0abcd4f85969
-      url: "https://pub.dev"
-    source: hosted
-    version: "1.0.0"
   hooks:
     dependency: transitive
     description:

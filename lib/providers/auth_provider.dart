@@ -48,6 +48,19 @@ class AuthProvider extends ChangeNotifier {
   bool get isEmailVerified =>
       _firebaseAuth.currentUser?.emailVerified ?? false;
 
+  /// Retourne le jeton d'identification Firebase actuel (pour les appels
+  /// authentifiés au backend), ou null si non connecté.
+  Future<String?> getIdToken() async {
+    final user = _firebaseAuth.currentUser;
+    if (user == null) return null;
+    try {
+      return await user.getIdToken();
+    } catch (e) {
+      AppLogger.warn('Auth', 'getIdToken échoué: $e');
+      return null;
+    }
+  }
+
   void _onFirebaseAuthChange(User? user) {
     if (user != null) {
       AppLogger.info('Auth', 'Changement d\'état: connecté (${user.email})');

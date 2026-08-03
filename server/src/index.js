@@ -63,6 +63,7 @@ if (cluster.isPrimary) {
   const audioRoutes = require('./routes/audio');
   const visionRoutes = require('./routes/vision');
   const authRoutes = require('./routes/auth');
+  const paymentsRoutes = require('./routes/payments');
 
   const app = express();
   const PORT = process.env.PORT || 4000;
@@ -108,6 +109,7 @@ if (cluster.isPrimary) {
   app.use('/api/audio', createRateLimiter({ windowMs, max: heavyMax }));
   app.use('/api/vision', createRateLimiter({ windowMs, max: heavyMax }));
   app.use('/api/auth', createRateLimiter({ windowMs, max: strictMax }));
+  app.use('/api/payments', createRateLimiter({ windowMs, max: strictMax }));
   app.use('/api', createRateLimiter({ windowMs, max: generalMax }));
 
   app.get('/health', (req, res) => {
@@ -125,6 +127,7 @@ if (cluster.isPrimary) {
   app.use('/api/audio', audioRoutes);
   app.use('/api/vision', visionRoutes);
   app.use('/api/auth', authRoutes);
+  app.use('/api/payments', paymentsRoutes);
 
   // 404 propre (JSON) — évite d'exposer la stack HTML par défaut.
   app.use((req, res) => {

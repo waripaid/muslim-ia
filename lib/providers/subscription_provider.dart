@@ -1,11 +1,14 @@
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
-import 'package:geniuspay_flutter/geniuspay_flutter.dart';
+import '../services/api_service.dart';
 import '../services/storage_service.dart';
 import '../utils/logger.dart';
+import 'auth_provider.dart';
 
 class SubscriptionProvider extends ChangeNotifier {
   final StorageService _storage;
+  final ApiService _api;
+  final AuthProvider _auth;
 
   bool _isSubscribed = false;
   bool _trialActive = false;
@@ -18,7 +21,13 @@ class SubscriptionProvider extends ChangeNotifier {
 
   static const _key = 'subscription';
 
-  SubscriptionProvider({required StorageService storage}) : _storage = storage {
+  SubscriptionProvider({
+    required StorageService storage,
+    required ApiService api,
+    required AuthProvider auth,
+  })  : _storage = storage,
+        _api = api,
+        _auth = auth {
     _load();
   }
 
@@ -94,18 +103,15 @@ class SubscriptionProvider extends ChangeNotifier {
     return true;
   }
 
-  // ── GENIUSPAY SDK ──────────────────────────────────────────
+  // ── PAIEMENT (via le backend) ─────────────────────────────
 
   /// URLs de redirection après paiement (détectées par la WebView intégrée).
   static const successUrl = 'https://muslim-ia.web.app/payment/success';
   static const errorUrl = 'https://muslim-ia.web.app/payment/error';
 
-  /// Crée un paiement en mode « checkout hébergé » (recommandé par GeniusPay) :
-  /// l'utilisateur choisit son moyen de paiement (Wave, Orange Money, MTN,
-  /// Moov, Carte) sur la page de paiement GeniusPay.
-  ///
-  /// Retourne l'URL de la page de paiement à ouvrir dans la WebView intégrée,
-  /// ou `null` en cas d'erreur (voir [lastPaymentError]).
+  /// Crée un paiement en mode « checkout hébergé » via le backend :
+  /// le secret GeniusPay reste côté serveur. Le backend renvoie l'URL de la
+  /// page de paiement à ouvrir dans la WebView intégrée.
   Future<String?> createCardPayment({
     required int amount,
     required String email,
@@ -122,50 +128,43 @@ class SubscriptionProvider extends ChangeNotifier {
     notifyListeners();
 
     try {
-      AppLogger.info('Sub', 'Appel GeniusPay.checkout() (mode hébergé)...');
-      final payment = await GeniusPay.client.checkout(
+      final idToken = await _auth.getIdToken();
+      if (idToken == null) {
+        AppLogger.warn('Sub', 'Utilisateur non connecté, paiement impossible');
+        lastPaymentError = 'Vous devez être connecté pour payer.';
+        return null;
+      }
+
+      AppLogger.info('Sub', 'Appel backend /api/payments/checkout...');
+      final res = await _api.createCheckout(
         amount: amount,
-        currency: 'XOF',
-        description: description,
-        customer: {
-          if (customerName != null && customerName.isNotEmpty) 'name': customerName,
-          'email': email,
-        },
-        successUrl: successUrl,
-        errorUrl: errorUrl,
-        metadata: {'app': 'muslim_ia', 'product': 'premium', 'email': email},
+        email: email,
+        customerName: customerName,
+        idToken: idToken,
       );
 
-      _paymentReference = payment.reference;
-      AppLogger.info('Sub', 'Paiement créé: reference=${payment.reference}, status=${payment.status.value}, environment=${payment.environment}');
+      if (res['success'] != true || res['data'] == null) {
+        final err = res['error'] ?? 'Erreur de paiement';
+        AppLogger.warn('Sub', 'Backend a refusé le checkout: $err');
+        lastPaymentError = err.toString();
+        return null;
+      }
 
-      final url = payment.checkoutUrl ?? payment.paymentUrl;
-      if (url == null || url.isEmpty) {
-        AppLogger.warn('Sub', 'Aucune URL de paiement retournée par l\'API !');
+      final data = res['data'] as Map<String, dynamic>;
+      _paymentReference = data['reference'] as String?;
+      AppLogger.info('Sub', 'Paiement créé côté serveur: reference=$_paymentReference, status=${data['status']}, env=${data['environment']}');
+
+      final url = (data['checkout_url'] as String?) ?? '';
+      if (url.isEmpty) {
+        AppLogger.warn('Sub', 'Aucune URL de paiement retournée par le backend !');
         lastPaymentError = 'L\'API de paiement n\'a pas retourné de page. Réessayez.';
         return null;
       }
       AppLogger.info('Sub', 'URL de paiement à ouvrir: $url');
       return url;
-    } on AuthenticationException catch (e) {
-      AppLogger.error('Sub', 'AuthenticationException — clés API GeniusPay invalides', e);
-      lastPaymentError = 'Clés API invalides (${e.message})';
-      return null;
-    } on ValidationException catch (e) {
-      AppLogger.error('Sub', 'ValidationException — données de paiement invalides', e);
-      lastPaymentError = 'Paiement invalide (${e.message})';
-      return null;
-    } on NetworkException catch (e) {
-      AppLogger.error('Sub', 'NetworkException — GeniusPay injoignable (URL ou DNS)', e);
-      lastPaymentError = 'Impossible de contacter GeniusPay. Vérifiez votre connexion.';
-      return null;
-    } on GeniusPayException catch (e) {
-      AppLogger.error('Sub', 'GeniusPayException status=${e.statusCode} code=${e.code}', e);
-      lastPaymentError = 'Erreur de paiement (${e.message})';
-      return null;
     } catch (e) {
-      AppLogger.error('Sub', 'Exception inattendue', e);
-      lastPaymentError = 'Erreur inattendue: $e';
+      AppLogger.error('Sub', 'Erreur lors de la création du paiement', e);
+      lastPaymentError = 'Impossible de contacter le serveur de paiement. Vérifiez votre connexion.';
       return null;
     } finally {
       _isProcessing = false;
@@ -173,14 +172,14 @@ class SubscriptionProvider extends ChangeNotifier {
     }
   }
 
-  /// Enregistre la référence d'un paiement déjà créé (via GeniusPaySheet).
+  /// Enregistre la référence d'un paiement déjà créé.
   void savePaymentReference(String reference) {
     _paymentReference = reference;
     lastPaymentError = null;
     notifyListeners();
   }
 
-  /// Interroge le statut d'un paiement jusqu'à sa confirmation.
+  /// Interroge le statut d'un paiement via le backend jusqu'à sa confirmation.
   /// Active l'abonnement (30 jours) si le paiement est complété.
   Future<bool> checkPaymentStatus() async {
     AppLogger.info('Sub', 'checkPaymentStatus() — référence: $_paymentReference');
@@ -193,14 +192,37 @@ class SubscriptionProvider extends ChangeNotifier {
     _isProcessing = true;
     notifyListeners();
 
+    final idToken = await _auth.getIdToken();
+    if (idToken == null) {
+      AppLogger.warn('Sub', 'Utilisateur non connecté, vérification impossible');
+      lastPaymentError = 'Vous devez être connecté.';
+      _isProcessing = false;
+      notifyListeners();
+      return false;
+    }
+
     // Un paiement mobile money peut prendre quelques secondes : on interroge plusieurs fois
     for (int attempt = 0; attempt < 6; attempt++) {
       try {
-        AppLogger.info('Sub', 'Tentative ${attempt + 1}/6 — getPayment($_paymentReference)...');
-        final payment = await GeniusPay.instance.getPayment(_paymentReference!);
-        AppLogger.info('Sub', 'Réponse tentatives ${attempt + 1}: status=${payment.status.value}, gateway=${payment.gateway ?? "null"}, completedAt=${payment.completedAt ?? "null"}');
+        AppLogger.info('Sub', 'Tentative ${attempt + 1}/6 — backend /api/payments/status...');
+        final res = await _api.getPaymentStatus(
+          reference: _paymentReference!,
+          idToken: idToken,
+        );
+        if (res['success'] != true || res['data'] == null) {
+          final err = res['error'] ?? 'Erreur de statut';
+          AppLogger.warn('Sub', 'Backend a refusé le statut: $err');
+          lastPaymentError = err.toString();
+          _isProcessing = false;
+          notifyListeners();
+          return false;
+        }
 
-        if (payment.status.isCompleted) {
+        final data = res['data'] as Map<String, dynamic>;
+        final status = (data['status'] ?? 'pending').toString();
+        AppLogger.info('Sub', 'Réponse tentative ${attempt + 1}: status=$status, gateway=${data['gateway'] ?? 'null'}, completed_at=${data['completed_at'] ?? 'null'}');
+
+        if (status == 'completed' || status == 'succeeded') {
           AppLogger.success('Sub', 'PAIEMENT COMPLÉTÉ ✅ — activation de l\'abonnement (30 jours)');
           _isSubscribed = true;
           _subscriptionEnd = DateTime.now().add(const Duration(days: 30));
@@ -212,17 +234,17 @@ class SubscriptionProvider extends ChangeNotifier {
           return true;
         }
 
-        if (payment.status.isFailed) {
-          AppLogger.warn('Sub', 'Paiement échoué: status=${payment.status.value}, failedAt=${payment.failedAt ?? "null"}');
+        if (status == 'failed' || status == 'cancelled' || status == 'expired') {
+          AppLogger.warn('Sub', 'Paiement échoué: status=$status, failed_at=${data['failed_at'] ?? 'null'}');
           lastPaymentError = 'Paiement échoué par l\'opérateur. Réessayez.';
           _isProcessing = false;
           notifyListeners();
           return false;
         }
 
-        AppLogger.info('Sub', 'Paiement encore en statut "${payment.status.value}", nouvel essai dans 3s...');
+        AppLogger.info('Sub', 'Paiement encore en statut "$status", nouvel essai dans 3s...');
       } catch (e) {
-        AppLogger.error('Sub', 'Erreur réseau/API lors de getPayment (tentative ${attempt + 1})', e);
+        AppLogger.error('Sub', 'Erreur réseau/API lors du statut (tentative ${attempt + 1})', e);
       }
       await Future.delayed(const Duration(seconds: 3));
     }

@@ -40,3 +40,13 @@ services:
         sync: false
       - key: MISTRAL_VOICE_ID
         sync: false
+      - key: GENIUSPAY_API_KEY
+        sync: false
+      - key: GENIUSPAY_API_SECRET
+        sync: false
+      - key: GENIUSPAY_BASE_URL
+        sync: false
+      - key: PAYMENT_SUCCESS_URL
+        sync: false
+      - key: PAYMENT_ERROR_URL
+        sync: false

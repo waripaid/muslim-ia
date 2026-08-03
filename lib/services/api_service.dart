@@ -303,6 +303,40 @@ class ApiService {
       return false;
     }
   }
+
+  /// Crée un paiement GeniusPay via le backend.
+  /// Le secret GeniusPay ne circule jamais dans l'app : seul le serveur l'utilise.
+  Future<Map<String, dynamic>> createCheckout({
+    required int amount,
+    required String email,
+    String? customerName,
+    required String idToken,
+  }) async {
+    final response = await _withRetry(() => http.post(
+      Uri.parse('$baseUrl/api/payments/checkout'),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({
+        'idToken': idToken,
+        'amount': amount,
+        'email': email,
+        if (customerName != null && customerName.isNotEmpty) 'customerName': customerName,
+      }),
+    ));
+    return jsonDecode(response.body);
+  }
+
+  /// Interroge le statut d'un paiement auprès du backend.
+  Future<Map<String, dynamic>> getPaymentStatus({
+    required String reference,
+    required String idToken,
+  }) async {
+    final response = await _withRetry(() => http.post(
+      Uri.parse('$baseUrl/api/payments/status'),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({'idToken': idToken, 'reference': reference}),
+    ));
+    return jsonDecode(response.body);
+  }
 }
 
 class ApiException implements Exception {
