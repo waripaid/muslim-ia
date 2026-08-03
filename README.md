@@ -56,10 +56,10 @@ flutter run --dart-define=API_BASE_URL=http://<IP_LAN>:4000
 
 ```bash
 # Signé avec le keystore upload-keystore.jks (configuré via android/key.properties)
+# Les clés GeniusPay ne sont PAS passées ici : le paiement est proxifié côté
+# serveur (server/src/services/geniuspay.js), configuré dans l'env du backend.
 flutter build appbundle --release \
-  --dart-define=API_BASE_URL=https://muslim-ia-api.onrender.com \
-  --dart-define=GENIUSPAY_API_KEY=pk_live_xxx \
-  --dart-define=GENIUSPAY_API_SECRET=sk_live_xxx
+  --dart-define=API_BASE_URL=https://muslim-ia-api.onrender.com
 ```
 
 ### Signer l'application
