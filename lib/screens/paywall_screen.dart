@@ -145,7 +145,9 @@ class _PaywallScreenState extends State<PaywallScreen> {
     ]));
   }
 
-  /// Crée le paiement puis ouvre la page de paiement dans la WebView intégrée.
+  /// Ouvre immédiatement la page de paiement (WebView intégrée) : la création
+  /// du paiement côté serveur se fait en arrière-plan pendant que l'écran
+  /// affiche son chargement, pour un accès quasi instantané à la page.
   Future<void> _pay(SubscriptionProvider sub) async {
     AppLogger.start('Paywall', 'Clic sur "Payer" — montant=${CurrencyService.basePriceXOF} XOF');
     if (sub.isProcessing) {
@@ -154,30 +156,17 @@ class _PaywallScreenState extends State<PaywallScreen> {
     }
     final email = context.read<AuthProvider>().email ?? 'user@muslimia.app';
     final name = context.read<AuthProvider>().fullName;
-    final l10n = AppLocalizations.of(context);
-    AppLogger.info('Paywall', 'Email utilisé pour le paiement: $email');
+    AppLogger.info('Paywall', 'Ouverture immédiate de la page de paiement intégrée (WebView)');
 
-    final url = await sub.createCardPayment(
-      amount: CurrencyService.basePriceXOF,
-      email: email,
-      customerName: name,
-    );
-    if (!mounted) return;
-
-    if (url == null) {
-      final error = sub.lastPaymentError ?? l10n.paywallPaymentError;
-      AppLogger.warn('Paywall', 'Échec de création du paiement — "$error"');
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(error)));
-      return;
-    }
-
-    AppLogger.info('Paywall', 'Ouverture de la page de paiement intégrée (WebView)');
     final result = await Navigator.push<WebPaymentResult>(
       context,
       MaterialPageRoute(
         builder: (_) => PaymentWebViewScreen(
-          checkoutUrl: url,
-          reference: sub.paymentReference ?? '',
+          createCheckout: () => sub.createCardPayment(
+            amount: CurrencyService.basePriceXOF,
+            email: email,
+            customerName: name,
+          ),
         ),
       ),
     );
@@ -194,7 +183,7 @@ class _PaywallScreenState extends State<PaywallScreen> {
         Navigator.pop(context);
       }
     } else if (result != null) {
-      final error = result.message ?? sub.lastPaymentError ?? l10n.paywallPaymentError;
+      final error = result.message ?? sub.lastPaymentError ?? AppLocalizations.of(context).paywallPaymentError;
       AppLogger.warn('Paywall', 'Paiement échoué — "$error"');
       final action = await Navigator.push<PaymentResultAction>(
         context,

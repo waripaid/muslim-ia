@@ -20,13 +20,12 @@ class WebPaymentResult {
 /// Détecte la redirection vers [SubscriptionProvider.successUrl] pour
 /// considérer le paiement comme réussi, puis vérifie et active l'abonnement.
 class PaymentWebViewScreen extends StatefulWidget {
-  final String checkoutUrl;
-  final String reference;
+  /// Crée le checkout côté serveur et retourne l'URL de la page de paiement.
+  final Future<String?> Function() createCheckout;
 
   const PaymentWebViewScreen({
     super.key,
-    required this.checkoutUrl,
-    required this.reference,
+    required this.createCheckout,
   });
 
   @override
@@ -61,8 +60,30 @@ class _PaymentWebViewScreenState extends State<PaymentWebViewScreen> {
           setState(() => _fatalError = 'Impossible de charger la page de paiement.');
         },
         onNavigationRequest: _onNavigation,
-      ))
-      ..loadRequest(Uri.parse(widget.checkoutUrl));
+      ));
+    _startCheckout();
+  }
+
+  Future<void> _startCheckout() async {
+    setState(() {
+      _loading = true;
+      _fatalError = null;
+    });
+    final url = await widget.createCheckout();
+    if (!mounted) return;
+    if (url == null) {
+      AppLogger.warn('WebPay', 'Échec de création du paiement');
+      setState(() {
+        _loading = false;
+        _fatalError = context.read<SubscriptionProvider>().lastPaymentError ??
+            'Impossible de contacter le serveur de paiement. Vérifiez votre connexion.';
+      });
+      return;
+    }
+    AppLogger.info('WebPay', 'URL de paiement reçue, chargement de la page');
+    try {
+      await _webCtrl.loadRequest(Uri.parse(url));
+    } catch (_) {}
   }
 
   FutureOr<NavigationDecision> _onNavigation(NavigationRequest request) {
@@ -215,11 +236,7 @@ class _PaymentWebViewScreenState extends State<PaymentWebViewScreen> {
               height: 48,
               child: ElevatedButton.icon(
                 onPressed: () {
-                  setState(() {
-                    _fatalError = null;
-                    _loading = true;
-                  });
-                  _webCtrl.loadRequest(Uri.parse(widget.checkoutUrl));
+                  _startCheckout();
                 },
                 icon: const Icon(Icons.refresh_rounded, size: 18),
                 label: Text(l10n.retry, style: const TextStyle(fontWeight: FontWeight.w700)),

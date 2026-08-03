@@ -240,8 +240,40 @@ async function callMistralDirectStream({ messages, res }) {
     if (!res.writableEnded) controller.abort();
   });
 
+  // Envoie immédiatement les en-têtes SSE au client : la connexion est établie
+  // tout de suite (l'app ne timeout plus sur client.send) pendant que Mistral
+  // prépare le premier token.
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache');
+  res.setHeader('Connection', 'keep-alive');
+  res.setHeader('X-Accel-Buffering', 'no');
+  res.flushHeaders?.();
+
+  let buffer = '';
+  let finished = false;
+
+  // Écrit en respectant la backpressure : si le client est plus lent que
+  // Mistral, on met l'upstream en pause pour ne pas saturer la mémoire.
+  const write = (data) => {
+    if (finished) return;
+    const ok = res.write(data);
+    if (!ok && response?.data) response.data.pause();
+  };
+  res.on('drain', () => {
+    if (!finished && response?.data) response.data.resume();
+  });
+
+  const finish = () => {
+    if (finished) return;
+    finished = true;
+    try {
+      res.end();
+    } catch (_) {}
+  };
+
+  let response;
   try {
-    const response = await axios.post(
+    response = await axios.post(
       MISTRAL_API_URL,
       {
         model: 'mistral-small-latest',
@@ -261,76 +293,6 @@ async function callMistralDirectStream({ messages, res }) {
         httpsAgent: MISTRAL_AGENT,
       }
     );
-
-    res.setHeader('Content-Type', 'text/event-stream');
-    res.setHeader('Cache-Control', 'no-cache');
-    res.setHeader('Connection', 'keep-alive');
-    res.setHeader('X-Accel-Buffering', 'no');
-    res.flushHeaders?.();
-
-    let buffer = '';
-    let finished = false;
-
-    // Écrit en respectant la backpressure : si le client est plus lent que
-    // Mistral, on met l'upstream en pause pour ne pas saturer la mémoire.
-    const write = (data) => {
-      if (finished) return;
-      const ok = res.write(data);
-      if (!ok) response.data.pause();
-    };
-    res.on('drain', () => {
-      if (!finished) response.data.resume();
-    });
-
-    const finish = () => {
-      if (finished) return;
-      finished = true;
-      try {
-        res.end();
-      } catch (_) {}
-    };
-
-    response.data.on('data', (chunk) => {
-      buffer += chunk.toString();
-      const lines = buffer.split('\n');
-      buffer = lines.pop() || '';
-
-      for (const line of lines) {
-        if (line.startsWith('data: ')) {
-          const data = line.slice(6).trim();
-          if (data === '[DONE]') {
-            write('data: [DONE]\n\n');
-            continue;
-          }
-          try {
-            const parsed = JSON.parse(data);
-            const content = parsed.choices?.[0]?.delta?.content || '';
-            const finishReason = parsed.choices?.[0]?.finish_reason;
-            if (content) {
-              write(`data: ${JSON.stringify({ text: content })}\n\n`);
-            }
-            if (finishReason === 'length') {
-              write('data: {"truncated":true}\n\n');
-            }
-          } catch (_) {
-            // skip unparseable chunks
-          }
-        }
-      }
-    });
-
-    response.data.on('end', () => {
-      write('data: [DONE]\n\n');
-      finish();
-    });
-
-    response.data.on('error', (err) => {
-      console.error('Stream error:', err.message);
-      try {
-        res.write(`data: ${JSON.stringify({ error: err.message })}\n\n`);
-      } catch (_) {}
-      finish();
-    });
   } catch (error) {
     // Abort volontaire (client déconnecté) → ne rien envoyer.
     if (error.name === 'CanceledError' || error.code === 'ERR_CANCELED' || controller.signal.aborted) {
@@ -344,7 +306,50 @@ async function callMistralDirectStream({ messages, res }) {
       res.write(`data: ${JSON.stringify({ error: error.message })}\n\n`);
       res.end();
     } catch (_) {}
+    return;
   }
+
+  response.data.on('data', (chunk) => {
+    buffer += chunk.toString();
+    const lines = buffer.split('\n');
+    buffer = lines.pop() || '';
+
+    for (const line of lines) {
+      if (line.startsWith('data: ')) {
+        const data = line.slice(6).trim();
+        if (data === '[DONE]') {
+          write('data: [DONE]\n\n');
+          continue;
+        }
+        try {
+          const parsed = JSON.parse(data);
+          const content = parsed.choices?.[0]?.delta?.content || '';
+          const finishReason = parsed.choices?.[0]?.finish_reason;
+          if (content) {
+            write(`data: ${JSON.stringify({ text: content })}\n\n`);
+          }
+          if (finishReason === 'length') {
+            write('data: {"truncated":true}\n\n');
+          }
+        } catch (_) {
+          // skip unparseable chunks
+        }
+      }
+    }
+  });
+
+  response.data.on('end', () => {
+    write('data: [DONE]\n\n');
+    finish();
+  });
+
+  response.data.on('error', (err) => {
+    console.error('Stream error:', err.message);
+    try {
+      res.write(`data: ${JSON.stringify({ error: err.message })}\n\n`);
+    } catch (_) {}
+    finish();
+  });
 }
 
 module.exports = {

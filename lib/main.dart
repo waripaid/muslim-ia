@@ -18,6 +18,7 @@ import 'services/api_service.dart';
 import 'services/deep_link_service.dart';
 import 'services/storage_service.dart';
 import 'screens/chat_screen.dart';
+import 'screens/forgot_password_screen.dart';
 import 'screens/login_screen.dart';
 import 'screens/paywall_screen.dart';
 import 'screens/profile_screen.dart';
@@ -389,52 +390,13 @@ class _QuickLoginState extends State<_QuickLogin> {
     codeCtrl.dispose();
   }
 
-  Future<void> _showForgotPassword() async {
-    final l10n = AppLocalizations.of(context);
-    final emailCtrl = TextEditingController(text: _email.text);
-    String? error;
-    bool loading = false;
-
-    await showDialog(context: context, builder: (ctx) => StatefulBuilder(
-      builder: (context, setDialogState) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
-        title: Text(l10n.authResetTitle),
-        content: Column(mainAxisSize: MainAxisSize.min, children: [
-          TextField(
-            controller: emailCtrl,
-            keyboardType: TextInputType.emailAddress,
-            decoration: InputDecoration(labelText: l10n.authEmail, prefixIcon: const Icon(Icons.email_outlined), border: const OutlineInputBorder()),
-          ),
-          if (error != null)
-            Padding(padding: const EdgeInsets.only(top: 10), child: Text(error!, style: const TextStyle(color: AppColors.error, fontSize: 13))),
-        ]),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: Text(l10n.cancel)),
-          ElevatedButton(
-            onPressed: loading ? null : () async {
-              if (emailCtrl.text.trim().isEmpty) {
-                setDialogState(() => error = l10n.authEmailInvalid);
-                return;
-              }
-              setDialogState(() { loading = true; error = null; });
-              final r = await context.read<AuthProvider>().resetPassword(email: emailCtrl.text.trim());
-              if (!context.mounted) return;
-              if (r != null) {
-                setDialogState(() { loading = false; error = r; });
-              } else {
-                Navigator.pop(ctx);
-                if (mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(l10n.authResetSent)));
-                }
-              }
-            },
-            style: ElevatedButton.styleFrom(backgroundColor: AppColors.accent),
-            child: Text(l10n.send),
-          ),
-        ],
+  void _showForgotPassword() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => ForgotPasswordScreen(initialEmail: _email.text),
       ),
-    ));
-    emailCtrl.dispose();
+    );
   }
 
   @override

@@ -15,6 +15,6 @@ class Env {
   /// URL du backend (voir ApiService).
   static const apiBaseUrl = String.fromEnvironment(
     'API_BASE_URL',
-    defaultValue: 'http://10.36.100.91:4000',
+    defaultValue: 'https://muslim-ia-api.onrender.com',
   );
 }
