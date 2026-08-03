@@ -100,7 +100,6 @@ class ChatProvider extends ChangeNotifier {
   String? _error;
   int _messagesSentToday = 0;
   static const int maxFreeMessages = 5;
-  bool _isSubscribed = false;
   bool _isPremium = false;
   String? _activeConversationId;
   final InternetStatusProvider? internetStatus;
@@ -114,13 +113,6 @@ class ChatProvider extends ChangeNotifier {
     _loadMessageCount();
     _restoreLastSession();
   }
-
-  set isSubscribed(bool value) {
-    _isSubscribed = value;
-    notifyListeners();
-  }
-
-  bool get isSubscribed => _isSubscribed;
 
   /// Abonnement PAYÉ (sans l'essai gratuit) : débloque les fonctionnalités media.
   set isPremium(bool value) {
@@ -136,8 +128,8 @@ class ChatProvider extends ChangeNotifier {
   ChatMode get currentMode => _currentMode;
   String? get error => _error;
   int get messagesSentToday => _messagesSentToday;
-  int get messagesLeft => _isSubscribed ? 999 : maxFreeMessages - _messagesSentToday;
-  bool get canSendMessage => _isSubscribed || _messagesSentToday < maxFreeMessages;
+  int get messagesLeft => _isPremium ? 999 : maxFreeMessages - _messagesSentToday;
+  bool get canSendMessage => _isPremium || _messagesSentToday < maxFreeMessages;
   String? get activeConversationId => _activeConversationId;
 
   void _loadMessageCount() {
@@ -713,26 +705,21 @@ ${_buildInstructions(lang)}''';
     AppLogger.warn('Chat', 'Conversation $id introuvable');
   }
 
-  /// Retire un message utilisateur (et sa réponse associée) et retourne son texte
-  /// pour que l'utilisateur puisse le modifier et le renvoyer.
+  /// Retire le message utilisateur et TOUT ce qui le suit (réponses et messages
+  /// suivants), puis retourne son texte pour que l'utilisateur puisse le
+  /// modifier et le renvoyer.
   String editMessage(ChatMessage message) {
     final idx = _messages.indexWhere((m) => m.id == message.id);
     if (idx == -1 || _messages[idx].role != ChatRole.user) return '';
     final text = _messages[idx].content;
-    var end = _messages.length;
-    for (int i = idx + 1; i < _messages.length; i++) {
-      if (_messages[i].role == ChatRole.user) {
-        end = i;
-        break;
-      }
-    }
-    _messages.removeRange(idx, end);
+    final removed = _messages.length - idx;
+    _messages.removeRange(idx, _messages.length);
     _storage.prefs.setStringList(
       'chat_history',
       _messages.map((m) => jsonEncode(m.toJson())).toList(),
     );
     notifyListeners();
-    AppLogger.info('Chat', 'editMessage: ${end - idx} message(s) retiré(s) avant renvoi');
+    AppLogger.info('Chat', 'editMessage: $removed message(s) retiré(s) après modification');
     return text;
   }
 

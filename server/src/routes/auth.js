@@ -27,6 +27,7 @@ router.post('/send-verification-email', async (req, res, next) => {
     try {
       decoded = await getAuth().verifyIdToken(idToken);
     } catch (e) {
+      console.warn(`[auth] Vérification idToken échouée: ${e.message} (code=${e.code || e.errorInfo?.code || 'unknown'})`);
       return res.status(401).json({ error: 'idToken invalide ou expiré', success: false });
     }
 

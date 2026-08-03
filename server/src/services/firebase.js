@@ -15,16 +15,17 @@ function initFirebase() {
 
   const keyPath = process.env.GOOGLE_APPLICATION_CREDENTIALS;
   const serviceAccountJson = process.env.FIREBASE_SERVICE_ACCOUNT;
-  const projectId = process.env.FIREBASE_PROJECT_ID;
+  const projectId = process.env.FIREBASE_PROJECT_ID || 'muslim-ia';
 
   try {
     if (serviceAccountJson) {
       // Préféré pour les plateformes d'hébergement (Render, Vercel…) :
       // le contenu complet du fichier de compte de service dans une variable d'environnement.
       const serviceAccount = JSON.parse(serviceAccountJson);
+      console.log(`[firebase] init via FIREBASE_SERVICE_ACCOUNT sa.project_id=${serviceAccount.project_id} → projectId effectif=${projectId}`);
       firebaseApp = admin.initializeApp({
         credential: admin.credential.cert(serviceAccount),
-        projectId: projectId || serviceAccount.project_id,
+        projectId,
       });
     } else if (keyPath) {
       const path = require('path');
@@ -32,17 +33,20 @@ function initFirebase() {
         ? keyPath
         : path.join(__dirname, '..', '..', keyPath);
       const serviceAccount = require(resolvedKeyPath);
+      console.log(`[firebase] init via GOOGLE_APPLICATION_CREDENTIALS sa.project_id=${serviceAccount.project_id} → projectId effectif=${projectId}`);
       firebaseApp = admin.initializeApp({
         credential: admin.credential.cert(serviceAccount),
-        projectId: projectId || serviceAccount.project_id,
+        projectId,
       });
     } else if (projectId) {
+      console.log(`[firebase] init via Application Default Credentials projectId=${projectId}`);
       firebaseApp = admin.initializeApp({
         credential: admin.credential.applicationDefault(),
         projectId,
       });
     } else {
       // Firebase non configuré — mode hors-ligne (stockage local uniquement)
+      console.log('[firebase] aucune configuration Firebase trouvée — mode hors-ligne');
       return null;
     }
   } catch (e) {
@@ -196,6 +200,8 @@ async function saveFcmToken(userId, fcmToken) {
 
 module.exports = {
   isFirebaseAvailable,
+  getAuth,
+  getDb,
   saveConversation,
   getConversations,
   addFavorite,

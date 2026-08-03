@@ -912,9 +912,7 @@ class _ChatShellState extends State<ChatShell> {
   void _syncSubscription() {
     if (mounted) {
       final sub = context.read<SubscriptionProvider>();
-      final chat = context.read<ChatProvider>();
-      chat.isSubscribed = sub.isSubscribed;
-      chat.isPremium = sub.isPremium;
+      context.read<ChatProvider>().isPremium = sub.isPremium;
     }
   }
 
@@ -969,42 +967,19 @@ class _ChatShellState extends State<ChatShell> {
             padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
             child: Text(l10n.chatHistory, style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: colors.textLight)),
           ),
-          ...conversations.map((c) => Dismissible(
+          ...conversations.map((c) => ListTile(
             key: Key(c['id']?.toString() ?? DateTime.now().toString()),
-            direction: DismissDirection.startToEnd,
-            confirmDismiss: (_) async {
-              return await showDialog<bool>(
-                context: context,
-                builder: (ctx) => AlertDialog(
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
-                  title: Text(l10n.chatDeleteTitle),
-                  content: Text(l10n.chatDeleteBody(c['title'] ?? '')),
-                  actions: [
-                    TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text(l10n.cancel)),
-                    ElevatedButton(onPressed: () => Navigator.pop(ctx, true), style: ElevatedButton.styleFrom(backgroundColor: AppColors.error), child: Text(l10n.delete, style: const TextStyle(color: Colors.white))),
-                  ],
-                ),
-              ) ?? false;
+            leading: Icon(c['id'] == activeId ? Icons.chat_bubble_rounded : Icons.chat_bubble_outline_rounded, size: 18, color: c['id'] == activeId ? AppColors.accent : colors.textLight),
+            title: Text(c['title'] ?? '', style: TextStyle(fontSize: 13, color: colors.textPrimary), maxLines: 1, overflow: TextOverflow.ellipsis),
+            subtitle: Text('${c['messageCount'] ?? 0} ${l10n.chatMessages}', style: TextStyle(fontSize: 11, color: colors.textSecondary)),
+            selected: c['id'] == activeId,
+            selectedTileColor: AppColors.accent.withValues(alpha: 0.1),
+            onTap: () {
+              chat.loadConversation(c['id']?.toString() ?? '');
+              Navigator.pop(context);
             },
-            onDismissed: (_) => chat.deleteConversation(c['id']?.toString() ?? ''),
-            background: Container(
-              alignment: Alignment.centerRight,
-              padding: const EdgeInsets.only(right: 20),
-              color: AppColors.error.withValues(alpha: 0.2),
-              child: const Icon(Icons.delete_rounded, color: AppColors.error),
-            ),
-            child: ListTile(
-              leading: Icon(c['id'] == activeId ? Icons.chat_bubble_rounded : Icons.chat_bubble_outline_rounded, size: 18, color: c['id'] == activeId ? AppColors.accent : colors.textLight),
-              title: Text(c['title'] ?? '', style: TextStyle(fontSize: 13, color: colors.textPrimary), maxLines: 1, overflow: TextOverflow.ellipsis),
-              subtitle: Text('${c['messageCount'] ?? 0} ${l10n.chatMessages}', style: TextStyle(fontSize: 11, color: colors.textSecondary)),
-              selected: c['id'] == activeId,
-              selectedTileColor: AppColors.accent.withValues(alpha: 0.1),
-              onTap: () {
-                chat.loadConversation(c['id']?.toString() ?? '');
-                Navigator.pop(context);
-              },
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-            ),
+            onLongPress: () => _confirmDeleteConversation(chat, c['id']?.toString() ?? '', c['title'] ?? '', l10n),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
           )),
         ],
         if (currentMsgCount == 0 && conversations.isEmpty)
@@ -1020,6 +995,24 @@ class _ChatShellState extends State<ChatShell> {
           ),
       ],
     );
+  }
+
+  Future<void> _confirmDeleteConversation(ChatProvider chat, String id, String title, AppLocalizations l10n) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+        title: Text(l10n.chatDeleteTitle),
+        content: Text(l10n.chatDeleteBody(title)),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text(l10n.cancel)),
+          ElevatedButton(onPressed: () => Navigator.pop(ctx, true), style: ElevatedButton.styleFrom(backgroundColor: AppColors.error), child: Text(l10n.delete, style: const TextStyle(color: Colors.white))),
+        ],
+      ),
+    );
+    if (confirmed == true) {
+      chat.deleteConversation(id);
+    }
   }
 
   PreferredSizeWidget _buildAppBar() {

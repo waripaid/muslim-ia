@@ -23,6 +23,7 @@ async function verifyToken(idToken) {
   try {
     return await getAuth().verifyIdToken(idToken);
   } catch (e) {
+    logger.warn('Payments', `Vérification idToken échouée: ${e.message} (code=${e.code || e.errorInfo?.code || 'unknown'})`);
     throw Object.assign(new Error('idToken invalide ou expiré'), { status: 401 });
   }
 }
