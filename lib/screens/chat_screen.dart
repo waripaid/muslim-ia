@@ -160,7 +160,7 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
     final chat = context.read<ChatProvider>();
     if (chat.isLoading) return;
 
-    if (hasImage && !chat.isSubscribed) {
+    if (hasImage && !chat.isPremium) {
       AppLogger.warn('ChatScreen', 'Envoi d\'image réservé aux abonnés');
       _showSubscriptionDialog(
         title: AppLocalizations.of(context).premiumFeatureTitle,
@@ -210,7 +210,7 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
   }
 
   void _requirePremium(ChatProvider chat, VoidCallback action) {
-    if (chat.isSubscribed) {
+    if (chat.isPremium) {
       action();
       return;
     }
@@ -669,6 +669,7 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
                   ? const SizedBox.shrink()
                   : GestureDetector(
                   key: const ValueKey('mic'),
+                  onTap: _onMicTap,
                   onLongPressStart: (_) => _onRecordStart(),
                   onLongPressEnd: (_) => _onRecordEnd(),
                   onLongPressCancel: () => _onRecordCancel(),
@@ -712,13 +713,21 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
     } catch (_) {}
   }
 
+  void _onMicTap() {
+    final chat = context.read<ChatProvider>();
+    if (!chat.isPremium) {
+      _requirePremium(chat, () {});
+    }
+  }
+
   Future<void> _onRecordStart() async {
     final chat = context.read<ChatProvider>();
-    if (!chat.isSubscribed) {
+    if (!chat.isPremium) {
       _requirePremium(chat, () {});
       return;
     }
     _tts.stop();
+
     try {
       final mic = Permission.microphone;
       var status = await mic.status;

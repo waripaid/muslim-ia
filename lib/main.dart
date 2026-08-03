@@ -912,7 +912,9 @@ class _ChatShellState extends State<ChatShell> {
   void _syncSubscription() {
     if (mounted) {
       final sub = context.read<SubscriptionProvider>();
-      context.read<ChatProvider>().isSubscribed = sub.isSubscribed;
+      final chat = context.read<ChatProvider>();
+      chat.isSubscribed = sub.isSubscribed;
+      chat.isPremium = sub.isPremium;
     }
   }
 
@@ -934,12 +936,15 @@ class _ChatShellState extends State<ChatShell> {
     final colors = ThemeColors.of(context);
     final conversations = chat.getSavedConversations();
     final currentMsgCount = chat.messages.length;
+    final activeId = chat.activeConversationId;
+    final activeInList = activeId != null && conversations.any((c) => c['id'] == activeId);
+    final showCurrent = currentMsgCount > 0 && (activeId == null || !activeInList);
 
     return ListView(
       padding: const EdgeInsets.symmetric(vertical: 8),
       children: [
-        // Current conversation
-        if (currentMsgCount > 0) ...[
+        // Current conversation (non encore sauvegardée ou absente de l'historique)
+        if (showCurrent) ...[
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
             child: Text(l10n.chatCurrent, style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: colors.textLight)),
@@ -989,9 +994,11 @@ class _ChatShellState extends State<ChatShell> {
               child: const Icon(Icons.delete_rounded, color: AppColors.error),
             ),
             child: ListTile(
-              leading: Icon(Icons.chat_bubble_outline_rounded, size: 18, color: colors.textLight),
+              leading: Icon(c['id'] == activeId ? Icons.chat_bubble_rounded : Icons.chat_bubble_outline_rounded, size: 18, color: c['id'] == activeId ? AppColors.accent : colors.textLight),
               title: Text(c['title'] ?? '', style: TextStyle(fontSize: 13, color: colors.textPrimary), maxLines: 1, overflow: TextOverflow.ellipsis),
               subtitle: Text('${c['messageCount'] ?? 0} ${l10n.chatMessages}', style: TextStyle(fontSize: 11, color: colors.textSecondary)),
+              selected: c['id'] == activeId,
+              selectedTileColor: AppColors.accent.withValues(alpha: 0.1),
               onTap: () {
                 chat.loadConversation(c['id']?.toString() ?? '');
                 Navigator.pop(context);

@@ -101,13 +101,18 @@ class ChatProvider extends ChangeNotifier {
   int _messagesSentToday = 0;
   static const int maxFreeMessages = 5;
   bool _isSubscribed = false;
+  bool _isPremium = false;
+  String? _activeConversationId;
   final InternetStatusProvider? internetStatus;
+
+  static const _keyActiveConv = 'active_conversation_id';
 
   ChatProvider({required ApiService api, required StorageService storage, InternetStatusProvider? internetStatus})
       : _api = api,
         _storage = storage,
         internetStatus = internetStatus {
     _loadMessageCount();
+    _restoreLastSession();
   }
 
   set isSubscribed(bool value) {
@@ -117,6 +122,14 @@ class ChatProvider extends ChangeNotifier {
 
   bool get isSubscribed => _isSubscribed;
 
+  /// Abonnement PAYÉ (sans l'essai gratuit) : débloque les fonctionnalités media.
+  set isPremium(bool value) {
+    _isPremium = value;
+    notifyListeners();
+  }
+
+  bool get isPremium => _isPremium;
+
   List<ChatMessage> get messages => _messages;
   bool get isLoading => _isLoading || _isSynthesizing;
   bool get isSynthesizing => _isSynthesizing;
@@ -125,6 +138,7 @@ class ChatProvider extends ChangeNotifier {
   int get messagesSentToday => _messagesSentToday;
   int get messagesLeft => _isSubscribed ? 999 : maxFreeMessages - _messagesSentToday;
   bool get canSendMessage => _isSubscribed || _messagesSentToday < maxFreeMessages;
+  String? get activeConversationId => _activeConversationId;
 
   void _loadMessageCount() {
     final stored = _storage.prefs.getString('msg_count');
@@ -138,6 +152,32 @@ class ChatProvider extends ChangeNotifier {
           _messagesSentToday = int.parse(trimmed);
         }
       } catch (_) {}
+    }
+  }
+
+  void _restoreLastSession() {
+    _activeConversationId = _storage.prefs.getString(_keyActiveConv);
+    final history = _storage.history;
+    if (history.isEmpty) return;
+    for (final s in history) {
+      try {
+        _messages.add(ChatMessage.fromJson(jsonDecode(s)));
+      } catch (_) {
+        // ignorer les entrées corrompues
+      }
+    }
+    if (_messages.isNotEmpty) {
+      _isLoading = false;
+      _error = null;
+    }
+    AppLogger.info('Chat', 'Session restaurée: ${_messages.length} messages (activeId=$_activeConversationId)');
+  }
+
+  void _persistActiveConversationId(String? id) {
+    if (id == null) {
+      _storage.prefs.remove(_keyActiveConv);
+    } else {
+      _storage.prefs.setString(_keyActiveConv, id);
     }
   }
 
@@ -276,6 +316,7 @@ class ChatProvider extends ChangeNotifier {
     }
 
     _isLoading = false;
+    saveCurrentConversation();
     notifyListeners();
   }
 
@@ -333,6 +374,7 @@ $confidentiality''';
     await _streamAssistantReply(question.trim());
 
     _isLoading = false;
+    saveCurrentConversation();
     notifyListeners();
   }
 
@@ -371,6 +413,7 @@ $confidentiality''';
     }
     await _streamAssistantReply(text.trim());
     _isLoading = false;
+    saveCurrentConversation();
     notifyListeners();
   }
 
@@ -561,6 +604,7 @@ ${_buildInstructions(lang)}''';
 
     _upsertHistory(target);
     _isLoading = false;
+    saveCurrentConversation();
     notifyListeners();
   }
 
@@ -590,19 +634,26 @@ ${_buildInstructions(lang)}''';
   void clearMessages() {
     AppLogger.info('Chat', 'clearMessages: ${_messages.length} messages supprimés');
     // Save current conversation before clearing
-    _saveCurrentConversation();
+    saveCurrentConversation();
     _messages.clear();
+    _activeConversationId = null;
+    _persistActiveConversationId(null);
     _storage.clearHistory();
     notifyListeners();
   }
 
-  void _saveCurrentConversation() {
+  /// Sauvegarde (ou met à jour) la conversation courante dans l'historique.
+  /// Chaque conversation garde un id stable, ce qui évite les doublons.
+  void saveCurrentConversation() {
     if (_messages.isEmpty) return;
+    _activeConversationId ??= DateTime.now().millisecondsSinceEpoch.toString();
+    final id = _activeConversationId!;
+    _persistActiveConversationId(id);
     final title = _messages.first.content.length > 50
         ? '${_messages.first.content.substring(0, 50)}...'
         : _messages.first.content;
     final conversation = {
-      'id': DateTime.now().millisecondsSinceEpoch.toString(),
+      'id': id,
       'title': title,
       'createdAt': DateTime.now().toIso8601String(),
       'messageCount': _messages.length,
@@ -612,6 +663,9 @@ ${_buildInstructions(lang)}''';
       'messages': _messages.map((m) => jsonEncode(m.toJson())).toList(),
     };
     final saved = _storage.prefs.getStringList('conversations') ?? [];
+    saved.removeWhere((s) {
+      try { return (jsonDecode(s) as Map)['id'] == id; } catch (_) { return false; }
+    });
     saved.insert(0, jsonEncode(conversation));
     if (saved.length > 50) saved.removeRange(50, saved.length);
     _storage.prefs.setStringList('conversations', saved);
@@ -622,7 +676,7 @@ ${_buildInstructions(lang)}''';
       if (user != null) {
         FirebaseFirestore.instance
             .collection('users').doc(user.uid)
-            .collection('conversations').doc(conversation['id'] as String)
+            .collection('conversations').doc(id)
             .set(conversation);
       }
     } catch (_) {}
@@ -646,6 +700,8 @@ ${_buildInstructions(lang)}''';
           _storage.prefs.setStringList('chat_history', msgs.cast<String>());
           _isLoading = false;
           _error = null;
+          _activeConversationId = id;
+          _persistActiveConversationId(id);
           notifyListeners();
           AppLogger.info('Chat', 'Conversation chargée: ${_messages.length} messages');
           return;

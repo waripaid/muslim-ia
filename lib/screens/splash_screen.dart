@@ -96,11 +96,11 @@ class _SplashScreenState extends State<SplashScreen>
                   ),
 
                   // ── Aurore dorée flottante ──────────────────────
-                  Transform.translate(
-                    offset: Offset(auroraX, -auroraY),
-                    child: Positioned(
-                      top: -100,
-                      right: -60,
+                  Positioned(
+                    top: -100,
+                    right: -60,
+                    child: Transform.translate(
+                      offset: Offset(auroraX, -auroraY),
                       child: Container(
                         width: 320,
                         height: 320,
@@ -117,11 +117,11 @@ class _SplashScreenState extends State<SplashScreen>
                     ),
                   ),
                   // ── Aurore bleue flottante ──────────────────────
-                  Transform.translate(
-                    offset: Offset(-auroraX * 0.8, auroraY),
-                    child: Positioned(
-                      bottom: -110,
-                      left: -90,
+                  Positioned(
+                    bottom: -110,
+                    left: -90,
+                    child: Transform.translate(
+                      offset: Offset(-auroraX * 0.8, auroraY),
                       child: Container(
                         width: 340,
                         height: 340,
