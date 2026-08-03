@@ -1,15 +1,11 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
+import '../config/env.dart';
 import '../utils/logger.dart';
 
 class ApiService {
-  // URL du backend. Compilée via --dart-define=API_BASE_URL=...
-  // Exemple de build de production :
-  //   flutter build apk --dart-define=API_BASE_URL=https://muslim-ia-api.onrender.com
-  static const defaultUrl = String.fromEnvironment(
-    'API_BASE_URL',
-    defaultValue: 'http://10.36.100.91:4000',
-  );
+  // URL du backend, injectée via --dart-define=API_BASE_URL=...
+  static const defaultUrl = Env.apiBaseUrl;
 
   final String baseUrl;
   bool _isOnline = true;

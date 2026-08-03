@@ -6,6 +6,7 @@ import 'package:geniuspay_flutter/geniuspay_flutter.dart';
 
 import 'dart:async';
 
+import 'config/env.dart';
 import 'config/theme.dart';
 import 'l10n/app_localizations.dart';
 import 'providers/app_state_provider.dart';
@@ -57,10 +58,10 @@ void main() async {
   AppLogger.start('GeniusPay', 'Initialisation...');
   try {
     GeniusPay.initialize(GeniusPayConfig(
-      apiKey: 'pk_live_REMOVED',
-      apiSecret: 'sk_live_REMOVED',
-      baseUrl: 'https://pay.genius.ci/api/v1/merchant',
-      sandbox: false,
+      apiKey: Env.geniusPayApiKey,
+      apiSecret: Env.geniusPayApiSecret,
+      baseUrl: Env.geniusPayBaseUrl,
+      sandbox: Env.geniusPaySandbox,
     ));
     AppLogger.success('GeniusPay', 'Initialisé: sandbox=${GeniusPay.isSandbox}, baseUrl=${GeniusPay.config.baseUrl}');
   } catch (e) {
