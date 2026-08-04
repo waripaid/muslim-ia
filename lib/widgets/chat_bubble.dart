@@ -16,6 +16,7 @@ class ChatBubble extends StatelessWidget {
   final bool isLoading;
   final bool isStreaming;
   final bool autoplayAudio;
+  final VoidCallback? onAutoplayTriggered;
 
   const ChatBubble({
     super.key,
@@ -28,6 +29,7 @@ class ChatBubble extends StatelessWidget {
     this.isLoading = false,
     this.isStreaming = false,
     this.autoplayAudio = false,
+    this.onAutoplayTriggered,
   });
 
   static final _nameRegex = _buildNameRegex();
@@ -244,6 +246,7 @@ class ChatBubble extends StatelessWidget {
                           audioPath: message.audioPath!,
                           barColor: AppColors.accent,
                           autoplay: autoplayAudio,
+                          onAutoplayTriggered: onAutoplayTriggered,
                         ),
                         const SizedBox(height: 10),
                       ],

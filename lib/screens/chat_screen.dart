@@ -152,6 +152,8 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
     if (t.isEmpty && !hasImage) return;
     final chat = context.read<ChatProvider>();
     if (chat.isLoading) return;
+    // Nouvelle interaction : plus d'autoplay de l'ancienne réponse.
+    _autoplayAudioId = null;
 
     if (hasImage && !chat.isPremium) {
       AppLogger.warn('ChatScreen', 'Envoi d\'image réservé aux abonnés');
@@ -468,6 +470,13 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
             return ChatBubble(
               message: msg,
               autoplayAudio: _autoplayAudioId != null && msg.id == _autoplayAudioId,
+              onAutoplayTriggered: () {
+                // L'audio a été déclenché une fois : on efface le signal pour
+                // qu'une reconstruction de la liste ne le rejoue pas.
+                if (mounted && _autoplayAudioId == msg.id) {
+                  setState(() => _autoplayAudioId = null);
+                }
+              },
               isStreaming: isLastAssistant && chat.isLoading && !voicePending,
               onSourceTap: () {
                 if (msg.sources != null && msg.sources!.isNotEmpty) {
@@ -1042,6 +1051,7 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
         _voiceMode = true;
         _lastSpokenMessageId = null;
         _recordedAudioPath = null;
+        _autoplayAudioId = null;
       });
     }
 

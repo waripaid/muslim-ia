@@ -12,6 +12,7 @@ class VoiceBubble extends StatefulWidget {
   final bool autoplay;
   final bool small;
   final ValueChanged<bool>? onPlayingChanged;
+  final VoidCallback? onAutoplayTriggered;
 
   const VoiceBubble({
     super.key,
@@ -20,6 +21,7 @@ class VoiceBubble extends StatefulWidget {
     this.autoplay = false,
     this.small = false,
     this.onPlayingChanged,
+    this.onAutoplayTriggered,
   });
 
   @override
@@ -79,6 +81,9 @@ class _VoiceBubbleState extends State<VoiceBubble> with SingleTickerProviderStat
       if (widget.autoplay && mounted) {
         setState(() => _playing = true);
         await _player.resumePlayer();
+        // Consomme le signal d'autoplay : l'audio ne doit être déclenché
+        // qu'une seule fois, même si la bulle est reconstruite ensuite.
+        widget.onAutoplayTriggered?.call();
       }
     } catch (e) {
       // Fichier indisponible ou moteur audio occupé
