@@ -242,31 +242,12 @@ function chunkSegment(text) {
   return chunks.filter(Boolean);
 }
 
-// Réordonne les segments pour lire d'abord les versets arabes (voix arabe)
-// puis le reste dans la langue du message, en re-découpant chaque bloc pour
-// rester sous la limite par segment. Ne réordonne que si le nombre d'appels
-// TTS est trop élevé (et dépasse le timeout de l'hébergement).
-function capSegments(segments, maxSegments = 8) {
-  if (segments.length <= maxSegments) return segments;
-  const arabic = [];
-  const rest = [];
-  let restLanguage = 'fr';
-  for (const s of segments) {
-    if (s.language === 'ar') {
-      arabic.push(s.text);
-    } else {
-      rest.push(s.text);
-      restLanguage = s.language;
-    }
-  }
-  const out = [];
-  for (const t of arabic) {
-    for (const c of chunkSegment(t)) out.push({ text: c, language: 'ar' });
-  }
-  for (const t of rest) {
-    for (const c of chunkSegment(t)) out.push({ text: c, language: restLanguage });
-  }
-  return out;
+// Garde l'ordre de lecture : les segments sont lus du début à la fin du
+// texte, l'arabe au moment où il apparaît puis sa traduction. On ne
+// réordonne jamais (un reclassement des versets arabes en tête coupait le
+// début du texte). La taille reste bornée par le découpage des segments.
+function capSegments(segments) {
+  return segments;
 }
 
 // Génère l'audio de plusieurs segments en limitant la concurrence :
