@@ -230,6 +230,9 @@ class AppLocalizationsPt extends AppLocalizations {
   }
 
   @override
+  String get chatVoiceTranscriptionLabel => 'Transcrição de áudio';
+
+  @override
   String get authLogin => 'Entrar';
 
   @override

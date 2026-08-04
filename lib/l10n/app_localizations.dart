@@ -522,6 +522,13 @@ abstract class AppLocalizations {
   /// **'Erreur de transcription: {error}'**
   String chatTranscriptionError(Object error);
 
+  /// Label affiché sur la bulle d'un message utilisateur issu d'une
+  /// transcription audio.
+  ///
+  /// In fr, this message translates to:
+  /// **'Transcription audio'**
+  String get chatVoiceTranscriptionLabel;
+
   /// No description provided for @authLogin.
   ///
   /// In fr, this message translates to:

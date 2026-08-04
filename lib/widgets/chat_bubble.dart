@@ -183,6 +183,23 @@ class ChatBubble extends StatelessWidget {
                           borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
                           child: Image.file(File(message.imagePath!), fit: BoxFit.cover, width: double.infinity),
                         ),
+                      if (message.fromVoice) ...[
+                        Padding(
+                          padding: const EdgeInsets.fromLTRB(14, 10, 14, 0),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Icon(Icons.mic_rounded, size: 13, color: Colors.white),
+                              const SizedBox(width: 5),
+                              Text(
+                                AppLocalizations.of(context).chatVoiceTranscriptionLabel,
+                                style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: Colors.white, letterSpacing: 0.3),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 6),
+                      ],
                       Padding(
                         padding: message.imagePath != null ? const EdgeInsets.all(12) : const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
                         child: message.audioPath != null

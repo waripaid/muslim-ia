@@ -427,6 +427,7 @@ $confidentiality''';
       role: ChatRole.user,
       timestamp: DateTime.now(),
       audioPath: audioPath,
+      fromVoice: true,
     );
 
     _messages.add(userMessage);

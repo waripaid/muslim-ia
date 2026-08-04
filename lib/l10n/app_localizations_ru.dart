@@ -230,6 +230,9 @@ class AppLocalizationsRu extends AppLocalizations {
   }
 
   @override
+  String get chatVoiceTranscriptionLabel => 'Аудиотранскрипция';
+
+  @override
   String get authLogin => 'Вход';
 
   @override

@@ -7,6 +7,7 @@ class ChatMessage {
   final String? imagePath;
   String? audioPath;
   bool isIncomplete;
+  final bool fromVoice;
 
   ChatMessage({
     required this.id,
@@ -17,6 +18,7 @@ class ChatMessage {
     this.imagePath,
     this.audioPath,
     this.isIncomplete = false,
+    this.fromVoice = false,
   });
 
   factory ChatMessage.fromJson(Map<String, dynamic> json) {
@@ -33,6 +35,7 @@ class ChatMessage {
       imagePath: json['imagePath'],
       audioPath: json['audioPath'],
       isIncomplete: json['isIncomplete'] == true,
+      fromVoice: json['fromVoice'] == true,
     );
   }
 
@@ -46,6 +49,7 @@ class ChatMessage {
         if (imagePath != null) 'imagePath': imagePath,
         if (audioPath != null) 'audioPath': audioPath,
         if (isIncomplete) 'isIncomplete': true,
+        if (fromVoice) 'fromVoice': true,
       };
 }
 
