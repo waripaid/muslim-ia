@@ -234,6 +234,9 @@ class AppLocalizationsFr extends AppLocalizations {
   String get chatVoiceTranscriptionLabel => 'Transcription audio';
 
   @override
+  String get chatPreparingVoice => 'Préparation de la voix…';
+
+  @override
   String get authLogin => 'Connexion';
 
   @override

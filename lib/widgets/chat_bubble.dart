@@ -17,6 +17,7 @@ class ChatBubble extends StatelessWidget {
   final bool isStreaming;
   final bool autoplayAudio;
   final VoidCallback? onAutoplayTriggered;
+  final bool hideContent;
 
   const ChatBubble({
     super.key,
@@ -30,6 +31,7 @@ class ChatBubble extends StatelessWidget {
     this.isStreaming = false,
     this.autoplayAudio = false,
     this.onAutoplayTriggered,
+    this.hideContent = false,
   });
 
   static final _nameRegex = _buildNameRegex();
@@ -234,7 +236,31 @@ class ChatBubble extends StatelessWidget {
                   ],
                 ),
                 const SizedBox(height: 8),
-                Container(
+                if (hideContent)
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                    decoration: BoxDecoration(
+                      color: AppColors.accent.withValues(alpha: 0.07),
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        SizedBox(
+                          width: 15,
+                          height: 15,
+                          child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.accent),
+                        ),
+                        const SizedBox(width: 10),
+                        Text(
+                          AppLocalizations.of(context).chatPreparingVoice,
+                          style: TextStyle(fontSize: 13, color: colors.textSecondary),
+                        ),
+                      ],
+                    ),
+                  )
+                else
+                  Container(
                   constraints: BoxConstraints(maxWidth: maxWidth),
                   width: message.audioPath != null ? null : double.infinity,
                   child: Column(

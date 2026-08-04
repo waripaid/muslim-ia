@@ -51,6 +51,10 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
   String? _autoplayAudioId;
   String? _pendingImage;
   String? _recordedAudioPath;
+  // Incrémenté à chaque nouvel envoi : permet à la synthèse en cours de
+  // savoir si un échange plus récent l'a remplacée (et donc de ne pas couper
+  // _voiceMode pour le message suivant).
+  int _voiceSeq = 0;
 
   @override
   void initState() {
@@ -110,6 +114,7 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
   /// l'arabe et déblaye les longs textes). On journalise simplement l'échec.
   Future<void> _synthesizeResponse(ChatProvider chat, ChatMessage message) async {
     chat.setSynthesizing(true);
+    final seq = _voiceSeq;
     try {
       final api = context.read<ApiService>();
       final lang = _textLanguage(message.content);
@@ -142,7 +147,10 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
       chat.setSynthesizing(false);
       // La voix est prête (ou a échoué) : on rend la main au chat normal.
       // Le texte et l'audio s'affichent ensemble à ce moment-là.
-      if (mounted) setState(() => _voiceMode = false);
+      // NB : si un échange plus récent a été lancé entre-temps (_voiceSeq a
+      // changé), on laisse _voiceMode actif pour que ce prochain message
+      // soit lui aussi lu à voix haute.
+      if (mounted && seq == _voiceSeq) setState(() => _voiceMode = false);
     }
   }
 
@@ -175,6 +183,7 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
 
     AppLogger.info('ChatScreen', 'Message envoyé: ${t.length > 40 ? '${t.substring(0, 40)}...' : t}');
     _ctrl.clear();
+    _voiceSeq++;
     if (_audioTranscriptionMode) {
       setState(() {
         _audioTranscriptionMode = false;
@@ -445,6 +454,12 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
     // le message reste sur « réflexion en cours » tant que le texte n'est pas
     // terminé (isLoading) OU que la voix est encore en cours (isSynthesizing),
     // et tant que audioPath est absent.
+    //
+    // IMPORTANT : la bulle d'attente ne remplace JAMAIS un message existant ;
+    // c'est un simple élément ajouté en bas de liste. Quand une voix est en
+    // préparation, la bulle de l'assistant reste affichée avec son contenu
+    // masqué (placeholder). Ainsi aucune bulle (utilisateur ou assistant) ne
+    // peut disparaître de la liste.
     final voiceBusy = chat.isLoading || chat.isSynthesizing;
     final voicePending = _voiceMode &&
         voiceBusy &&
@@ -462,13 +477,14 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
           itemBuilder: (context, i) {
             if (showThinking && i == 0) return const ThinkingAnimation();
             final idx = chat.messages.length - 1 - i + (showThinking ? 1 : 0);
-            if (voicePending && idx == chat.messages.length - 1) {
-              return const ThinkingAnimation();
-            }
             final msg = chat.messages[idx];
             final isLastAssistant = msg.role == ChatRole.assistant && idx == chat.messages.length - 1;
             return ChatBubble(
+              // Clé stable : les états (lecteur audio) suivent le message,
+              // pas sa position, quand des éléments sont ajoutés au-dessus.
+              key: ValueKey(msg.id),
               message: msg,
+              hideContent: voicePending && idx == chat.messages.length - 1,
               autoplayAudio: _autoplayAudioId != null && msg.id == _autoplayAudioId,
               onAutoplayTriggered: () {
                 // L'audio a été déclenché une fois : on efface le signal pour
@@ -1048,6 +1064,7 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
 
     if (mounted) {
       setState(() {
+        _voiceSeq++;
         _voiceMode = true;
         _lastSpokenMessageId = null;
         _recordedAudioPath = null;

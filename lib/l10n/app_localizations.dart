@@ -529,6 +529,13 @@ abstract class AppLocalizations {
   /// **'Transcription audio'**
   String get chatVoiceTranscriptionLabel;
 
+  /// Placeholder affiché dans la bulle de l'assistant pendant la génération
+  /// de la voix (le texte ne s'affiche qu'une fois l'audio prêt).
+  ///
+  /// In fr, this message translates to:
+  /// **'Préparation de la voix…'**
+  String get chatPreparingVoice;
+
   /// No description provided for @authLogin.
   ///
   /// In fr, this message translates to:

@@ -227,6 +227,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String get chatVoiceTranscriptionLabel => '音频转录';
 
   @override
+  String get chatPreparingVoice => '正在准备语音…';
+
+  @override
   String get authLogin => '登录';
 
   @override
