@@ -126,10 +126,12 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
       final audio = result['audio'];
       if (result['success'] == true && audio is String && audio.isNotEmpty) {
         final bytes = base64Decode(audio);
+        // Multi-segments → WAV fusionné ; un seul segment → mp3.
+        final fmt = result['format'] == 'wav' ? 'wav' : 'mp3';
         final docs = await getApplicationDocumentsDirectory();
         final dir = Directory('${docs.path}/voice_messages');
         await dir.create(recursive: true);
-        final dest = '${dir.path}/reply_${message.id}.mp3';
+        final dest = '${dir.path}/reply_${message.id}.$fmt';
         await File(dest).writeAsBytes(bytes);
         if (!mounted) return;
         setState(() => _autoplayAudioId = message.id);

@@ -190,12 +190,72 @@ function splitSegments(text, defaultLanguage) {
   return segments;
 }
 
+// Fusionne les segments consécutifs de même langue : réduit le nombre
+// d'appels TTS sans changer l'ordre de lecture.
+function mergeConsecutive(segments) {
+  const merged = [];
+  for (const s of segments) {
+    const last = merged[merged.length - 1];
+    if (last && last.language === s.language) {
+      last.text = `${last.text}\n${s.text}`;
+    } else {
+      merged.push({ text: s.text, language: s.language });
+    }
+  }
+  return merged;
+}
+
+// Limite le nombre de segments à synthétiser : chaque segment = un appel TTS,
+// et trop d'appels parallèles dépassent le timeout du proxy d'hébergement.
+// Au-delà de 4, on lit d'abord tous les versets arabes (voix arabe) puis
+// tout le reste dans la langue du message — l'arabe reste lu avant la
+// traduction.
+function capSegments(segments) {
+  if (segments.length <= 4) return segments;
+  const arabic = [];
+  const rest = [];
+  let restLanguage = null;
+  for (const s of segments) {
+    if (s.language === 'ar') {
+      arabic.push(s.text);
+    } else {
+      rest.push(s.text);
+      if (!restLanguage) restLanguage = s.language;
+    }
+  }
+  const out = [];
+  if (arabic.length) out.push({ text: arabic.join('\n\n'), language: 'ar' });
+  if (rest.length) out.push({ text: rest.join('\n\n'), language: restLanguage || 'fr' });
+  return out;
+}
+
+// Génère l'audio de plusieurs segments en limitant la concurrence :
+// Mistral étrangle les appels TTS parallèles, on en lance donc seulement
+// deux à la fois pour rester sous le timeout de l'hébergement.
+async function generateSegments(segments, voiceId, format = 'mp3') {
+  const CONCURRENCY = 2;
+  const results = new Array(segments.length);
+  let i = 0;
+  async function worker() {
+    while (i < segments.length) {
+      const idx = i++;
+      results[idx] = await generateSpeech(segments[idx].text, segments[idx].language, voiceId, format);
+    }
+  }
+  const workers = Array.from(
+    { length: Math.min(CONCURRENCY, segments.length) },
+    worker
+  );
+  await Promise.all(workers);
+  return results;
+}
+
 // Génère l'audio d'un seul segment et retourne l'audio_data (base64).
-async function generateSpeech(input, language, voiceId) {
+async function generateSpeech(input, language, voiceId, format = 'mp3') {
   const payload = {
     model: 'voxtral-mini-tts-2603',
     input: sanitizeForTTS(input, language),
-    response_format: 'mp3',
+    response_format: format,
     voice_id: pickVoice(language, voiceId),
   };
 
@@ -215,6 +275,47 @@ async function generateSpeech(input, language, voiceId) {
   return audioData;
 }
 
+// Fusionne plusieurs fichiers WAV (PCM 16-bit, mêmes paramètres) : garde le
+// header du premier, concatène les données PCM des suivants et corrige les
+// tailles RIFF/data. Retourne un Buffer WAV complet.
+// NB : la concaténation binaire de MP3 est imprévisible (les décodeurs
+// s'arrêtent au premier segment), d'où le passage par du WAV pour le
+// multi-segments.
+function mergeWavs(wavBuffers) {
+  const findChunk = (buf, name) => {
+    const idx = buf.indexOf(name);
+    return idx >= 0 ? idx : null;
+  };
+
+  let dataSize = 0;
+  let header = null;
+  for (const buf of wavBuffers) {
+    const dIdx = findChunk(buf, Buffer.from('data'));
+    if (dIdx === null) throw new Error('WAV sans chunk data');
+    if (header === null) {
+      header = Buffer.from(buf.subarray(0, dIdx + 8));
+    }
+    dataSize += buf.length - (dIdx + 8);
+  }
+  if (header === null) throw new Error('Aucun WAV à fusionner');
+
+  const out = Buffer.alloc(header.length + dataSize);
+  header.copy(out, 0);
+  let offset = header.length;
+  for (const buf of wavBuffers) {
+    const dIdx = findChunk(buf, Buffer.from('data'));
+    const start = dIdx + 8;
+    buf.copy(out, offset, start, buf.length);
+    offset += buf.length - start;
+  }
+
+  // RIFF size (octets 4-7) = taille fichier - 8
+  out.writeUInt32LE(out.length - 8, 4);
+  // data chunk size (4 octets avant les données PCM)
+  out.writeUInt32LE(dataSize, header.length - 4);
+  return out;
+}
+
 async function textToSpeech(text, language = null, voiceId = null) {
   if (typeof text !== 'string' || text.trim().length === 0) {
     return { success: false, error: 'Aucun texte à synthétiser' };
@@ -224,7 +325,8 @@ async function textToSpeech(text, language = null, voiceId = null) {
   }
   try {
     const lang = language || 'fr';
-    const segments = splitSegments(text, lang).filter((s) => s.text.trim());
+    let segments = splitSegments(text, lang).filter((s) => s.text.trim());
+    segments = capSegments(mergeConsecutive(segments));
     if (segments.length <= 1) {
       const audioData = await generateSpeech(
         segments[0] ? segments[0].text : text,
@@ -235,14 +337,14 @@ async function textToSpeech(text, language = null, voiceId = null) {
     }
 
     logger.info('Audio', `TTS multi-segments (${segments.length})`);
-    const audios = await Promise.all(
-      segments.map((s) => generateSpeech(s.text, s.language, voiceId))
-    );
-    const combined = audios.filter(Boolean).join('');
-    if (!combined) {
+    const audios = await generateSegments(segments, voiceId, 'wav');
+    const buffers = audios.filter(Boolean).map((b64) => Buffer.from(b64, 'base64'));
+    if (buffers.length === 0) {
       return { success: false, error: 'Aucun audio reçu du fournisseur TTS' };
     }
-    return { success: true, audio: combined, format: 'mp3' };
+    const merged = mergeWavs(buffers);
+    logger.info('Audio', `WAV fusionné: ${merged.length} octets`);
+    return { success: true, audio: merged.toString('base64'), format: 'wav' };
   } catch (error) {
     logger.error('Audio', 'Erreur TTS', error.message);
     return {
