@@ -50,11 +50,14 @@ class AuthProvider extends ChangeNotifier {
 
   /// Retourne le jeton d'identification Firebase actuel (pour les appels
   /// authentifiés au backend), ou null si non connecté.
-  Future<String?> getIdToken() async {
+  /// Avec [forceRefresh], un nouveau jeton est émis par Firebase même si le
+  /// précédent n'est pas expiré — évite les 401 « idToken expiré » côté
+  /// serveur lorsque l'utilisateur a attendu longtemps sur un écran.
+  Future<String?> getIdToken({bool forceRefresh = false}) async {
     final user = _firebaseAuth.currentUser;
     if (user == null) return null;
     try {
-      return await user.getIdToken();
+      return await user.getIdToken(forceRefresh);
     } catch (e) {
       AppLogger.warn('Auth', 'getIdToken échoué: $e');
       return null;

@@ -129,7 +129,10 @@ class SubscriptionProvider extends ChangeNotifier {
     notifyListeners();
 
     try {
-      final idToken = await _auth.getIdToken();
+      // Jeton rafraîchi obligatoirement : l'utilisateur a pu rester longtemps
+      // sur l'écran d'abonnement, un jeton périmé serait refusé (401) par le
+      // backend lors de la création du paiement.
+      final idToken = await _auth.getIdToken(forceRefresh: true);
       if (idToken == null) {
         AppLogger.warn('Sub', 'Utilisateur non connecté, paiement impossible');
         lastPaymentError = 'Vous devez être connecté pour payer.';
@@ -193,7 +196,7 @@ class SubscriptionProvider extends ChangeNotifier {
     _isProcessing = true;
     notifyListeners();
 
-    final idToken = await _auth.getIdToken();
+    final idToken = await _auth.getIdToken(forceRefresh: true);
     if (idToken == null) {
       AppLogger.warn('Sub', 'Utilisateur non connecté, vérification impossible');
       lastPaymentError = 'Vous devez être connecté.';

@@ -94,15 +94,32 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
     _lastSpokenMessageId = last.id;
     AppLogger.info('ChatScreen', 'Réponse vocale déclenchée');
     _synthesizeResponse(chat, last);
+    // Le mode vocal est à usage unique : la réponse est lue une fois, puis
+    // on revient au chat normal pour ne pas rejouer chaque réponse ensuite.
+    if (mounted) setState(() => _voiceMode = false);
+  }
+
+  /// Langue à utiliser pour la synthèse vocale d'un texte : 'ar' si le
+  /// message est majoritairement arabe, sinon la langue de l'application.
+  /// La voix française lit mal l'arabe (translittération), on bascule donc
+  /// sur la voix anglaise (Paul) qui le prononce correctement.
+  String _textLanguage(String content) {
+    final runes = content.trim().runes;
+    final arabic = runes.where((r) => r >= 0x0600 && r <= 0x06FF).length;
+    final total = runes.length;
+    if (total > 0 && arabic > total * 0.4) return 'ar';
+    return Localizations.localeOf(context).languageCode;
   }
 
   Future<void> _synthesizeResponse(ChatProvider chat, ChatMessage message) async {
     chat.setSynthesizing(true);
     try {
       final api = context.read<ApiService>();
-      final lang = Localizations.localeOf(context).languageCode;
+      final lang = _textLanguage(message.content);
       final result = await api.textToSpeech(
-        _cleanForShare(message.content),
+        // Contenu brut (balises [SOURCE] conservées) : le serveur découpe
+        // les versets arabes pour les lire en arabe puis la traduction.
+        message.content,
         language: lang,
         voiceId: _kMistralVoiceId.isEmpty ? null : _kMistralVoiceId,
       );
@@ -120,10 +137,10 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
         return;
       }
       AppLogger.warn('ChatScreen', 'TTS serveur sans audio, repli TTS local');
-      _speak(_cleanForShare(message.content));
+      _speak(message.content);
     } catch (e) {
       AppLogger.warn('ChatScreen', 'TTS serveur échoué, repli TTS local: $e');
-      _speak(_cleanForShare(message.content));
+      _speak(message.content);
     } finally {
       chat.setSynthesizing(false);
     }
@@ -141,9 +158,9 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
 
   Future<void> _speak(String text) async {
     try {
-      final lang = Localizations.localeOf(context).languageCode;
+      final lang = _textLanguage(text);
       await _tts.setLanguage(lang == 'ar' ? 'ar-SA' : lang == 'en' ? 'en-US' : lang == 'es' ? 'es-ES' : lang == 'pt' ? 'pt-PT' : lang == 'ru' ? 'ru-RU' : lang == 'zh' ? 'zh-CN' : 'fr-FR');
-      final clean = _cleanForShare(text);
+      final clean = _cleanForSpeech(text);
       if (clean.trim().isNotEmpty) {
         await _tts.stop();
         await _tts.speak(clean);
@@ -894,6 +911,28 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
   String _cleanForShare(String content) {
     return content
         .replaceAll(RegExp(r'\[SOURCE\](.*?)\[/SOURCE\]', dotAll: true), r'$1')
+        .trim();
+  }
+
+  /// Nettoie le texte avant synthèse vocale : retire les symboles isolés
+  /// ($, •, tirets, #, etc.) que la voix lirait lettre à lettre.
+  String _cleanForSpeech(String content) {
+    return content
+        .replaceAll(RegExp(r'\[SOURCE\](.*?)\[/SOURCE\]', dotAll: true), r'$1')
+        // Puces markdown (« • ») et caractères de liste
+        .replaceAll(RegExp(r'^\s*[•●◦]\s+', multiLine: true), '')
+        .replaceAll(RegExp(r'[•●◦]'), ' ')
+        // Montants en devise : ne garder que les chiffres (5 $ → 5)
+        .replaceAll(RegExp(r'[$€£¥]\s*(\d[\d\s.,]*)'), r'$1')
+        // Symboles isolés non parlés
+        .replaceAll(RegExp(r'[#%&^@|_~=]'), ' ')
+        // Tirets / points de suspension isolés
+        .replaceAll(RegExp(r'\s+[-—–]\s+'), ', ')
+        .replaceAll(RegExp(r'[-—–]+'), ' ')
+        // Emojis (lu·e·s par la voix sinon)
+        .replaceAll(RegExp(r'[\u{1F000}-\u{1FAFF}\u{2600}-\u{27BF}\u{FE0F}\u{2190}-\u{21FF}]', unicode: true), ' ')
+        // Espaces multiples
+        .replaceAll(RegExp(r'\s+'), ' ')
         .trim();
   }
 

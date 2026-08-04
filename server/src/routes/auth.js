@@ -27,8 +27,13 @@ router.post('/send-verification-email', async (req, res, next) => {
     try {
       decoded = await getAuth().verifyIdToken(idToken);
     } catch (e) {
-      console.warn(`[auth] Vérification idToken échouée: ${e.message} (code=${e.code || e.errorInfo?.code || 'unknown'})`);
-      return res.status(401).json({ error: 'idToken invalide ou expiré', success: false });
+      const code = e.code || e.errorInfo?.code || 'unknown';
+      console.warn(`[auth] Vérification idToken échouée: ${e.message} (code=${code})`);
+      const expired = code === 'auth/id-token-expired' || /expired/i.test(e.message || '');
+      return res.status(401).json({
+        error: expired ? 'Session expirée, reconnectez-vous puis réessayez.' : 'idToken invalide ou expiré',
+        success: false,
+      });
     }
 
     const uid = decoded.uid;
