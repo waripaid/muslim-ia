@@ -205,27 +205,67 @@ function mergeConsecutive(segments) {
   return merged;
 }
 
-// Limite le nombre de segments à synthétiser : chaque segment = un appel TTS,
-// et trop d'appels parallèles dépassent le timeout du proxy d'hébergement.
-// Au-delà de 4, on lit d'abord tous les versets arabes (voix arabe) puis
-// tout le reste dans la langue du message — l'arabe reste lu avant la
-// traduction.
-function capSegments(segments) {
-  if (segments.length <= 4) return segments;
+// Longueur max d'un segment TTS (≈ 250 mots) : sous la limite de Mistral
+// (~300 mots), sinon l'API refuse ou tronque la synthèse.
+const MAX_CHARS_PER_SEGMENT = 1400;
+
+// Découpe un texte trop long en sous-segments, de préférence aux frontières
+// de phrases, sans jamais dépasser la limite par segment.
+function chunkSegment(text) {
+  const maxChars = MAX_CHARS_PER_SEGMENT;
+  const chunks = [];
+  let remaining = String(text).trim();
+  while (remaining.length > maxChars) {
+    let cut = -1;
+    // Frontière de phrase préférée : ponctuation + espace ou saut de ligne.
+    for (let i = maxChars; i > Math.floor(maxChars / 2); i--) {
+      const c = remaining[i];
+      if (c === '\n' || (c === ' ' && i > 0 && '.!?؛;'.includes(remaining[i - 1]))) {
+        cut = i + 1;
+        break;
+      }
+    }
+    // Sinon : dernier espace de la fenêtre pour ne pas couper un mot.
+    if (cut === -1) {
+      for (let i = maxChars; i > Math.floor(maxChars / 2); i--) {
+        if (remaining[i] === ' ') {
+          cut = i + 1;
+          break;
+        }
+      }
+    }
+    if (cut === -1) cut = maxChars;
+    chunks.push(remaining.slice(0, cut).trim());
+    remaining = remaining.slice(cut).trim();
+  }
+  if (remaining) chunks.push(remaining);
+  return chunks.filter(Boolean);
+}
+
+// Réordonne les segments pour lire d'abord les versets arabes (voix arabe)
+// puis le reste dans la langue du message, en re-découpant chaque bloc pour
+// rester sous la limite par segment. Ne réordonne que si le nombre d'appels
+// TTS est trop élevé (et dépasse le timeout de l'hébergement).
+function capSegments(segments, maxSegments = 8) {
+  if (segments.length <= maxSegments) return segments;
   const arabic = [];
   const rest = [];
-  let restLanguage = null;
+  let restLanguage = 'fr';
   for (const s of segments) {
     if (s.language === 'ar') {
       arabic.push(s.text);
     } else {
       rest.push(s.text);
-      if (!restLanguage) restLanguage = s.language;
+      restLanguage = s.language;
     }
   }
   const out = [];
-  if (arabic.length) out.push({ text: arabic.join('\n\n'), language: 'ar' });
-  if (rest.length) out.push({ text: rest.join('\n\n'), language: restLanguage || 'fr' });
+  for (const t of arabic) {
+    for (const c of chunkSegment(t)) out.push({ text: c, language: 'ar' });
+  }
+  for (const t of rest) {
+    for (const c of chunkSegment(t)) out.push({ text: c, language: restLanguage });
+  }
   return out;
 }
 
@@ -320,13 +360,19 @@ async function textToSpeech(text, language = null, voiceId = null) {
   if (typeof text !== 'string' || text.trim().length === 0) {
     return { success: false, error: 'Aucun texte à synthétiser' };
   }
-  if (text.length > 5000) {
-    return { success: false, error: 'Texte trop long (maximum 5000 caractères)' };
+  if (text.length > 8000) {
+    return { success: false, error: 'Texte trop long (maximum 8000 caractères)' };
   }
   try {
     const lang = language || 'fr';
     let segments = splitSegments(text, lang).filter((s) => s.text.trim());
     segments = capSegments(mergeConsecutive(segments));
+    // Découpe les segments trop longs (limite Mistral ~300 mots par appel).
+    const chunked = [];
+    for (const s of segments) {
+      for (const c of chunkSegment(s.text)) chunked.push({ text: c, language: s.language });
+    }
+    segments = chunked;
     if (segments.length <= 1) {
       const audioData = await generateSpeech(
         segments[0] ? segments[0].text : text,

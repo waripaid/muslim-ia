@@ -8,7 +8,6 @@ import 'package:image_picker/image_picker.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:provider/provider.dart';
 import 'package:flutter_sound/flutter_sound.dart';
-import 'package:flutter_tts/flutter_tts.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 import '../config/theme.dart';
@@ -41,7 +40,6 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
   final _focus = FocusNode();
   late final AnimationController _pulse;
   final _audioRecorder = FlutterSoundRecorder();
-  final _tts = FlutterTts();
   ChatProvider? _chat;
   bool _showFab = false;
   int _lastMsgCount = 0;
@@ -65,13 +63,11 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
     _chat = context.read<ChatProvider>();
     _chat!.addListener(_onChatChanged);
     _initAudio();
-    _initTts();
   }
 
   @override
   void dispose() {
     _chat?.removeListener(_onChatChanged);
-    _tts.stop();
     _ctrl.dispose(); _scrollCtrl.dispose(); _focus.dispose(); _pulse.dispose();
     _audioRecorder.closeRecorder();
     super.dispose();
@@ -111,6 +107,8 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
     return Localizations.localeOf(context).languageCode;
   }
 
+  /// Repli serveur : aucune lecture avec la voix du téléphone (elle lit mal
+  /// l'arabe et déblaye les longs textes). On journalise simplement l'échec.
   Future<void> _synthesizeResponse(ChatProvider chat, ChatMessage message) async {
     chat.setSynthesizing(true);
     try {
@@ -138,37 +136,11 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
         chat.setMessageAudio(message.id, dest);
         return;
       }
-      AppLogger.warn('ChatScreen', 'TTS serveur sans audio, repli TTS local');
-      _speak(message.content);
+      AppLogger.warn('ChatScreen', 'TTS serveur sans audio');
     } catch (e) {
-      AppLogger.warn('ChatScreen', 'TTS serveur échoué, repli TTS local: $e');
-      _speak(message.content);
+      AppLogger.warn('ChatScreen', 'TTS serveur échoué: $e');
     } finally {
       chat.setSynthesizing(false);
-    }
-  }
-
-  Future<void> _initTts() async {
-    try {
-      await _tts.setSpeechRate(0.45);
-      await _tts.setVolume(1.0);
-      await _tts.setPitch(1.0);
-    } catch (e) {
-      AppLogger.warn('ChatScreen', 'TTS indisponible: $e');
-    }
-  }
-
-  Future<void> _speak(String text) async {
-    try {
-      final lang = _textLanguage(text);
-      await _tts.setLanguage(lang == 'ar' ? 'ar-SA' : lang == 'en' ? 'en-US' : lang == 'es' ? 'es-ES' : lang == 'pt' ? 'pt-PT' : lang == 'ru' ? 'ru-RU' : lang == 'zh' ? 'zh-CN' : 'fr-FR');
-      final clean = _cleanForSpeech(text);
-      if (clean.trim().isNotEmpty) {
-        await _tts.stop();
-        await _tts.speak(clean);
-      }
-    } catch (e) {
-      AppLogger.warn('ChatScreen', 'Erreur synthèse vocale: $e');
     }
   }
 
@@ -198,7 +170,6 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
     }
 
     AppLogger.info('ChatScreen', 'Message envoyé: ${t.length > 40 ? '${t.substring(0, 40)}...' : t}');
-    _tts.stop();
     _ctrl.clear();
     if (_audioTranscriptionMode) {
       setState(() {
@@ -745,7 +716,6 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
       _requirePremium(chat, () {});
       return;
     }
-    _tts.stop();
 
     try {
       final mic = Permission.microphone;
@@ -913,28 +883,6 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
   String _cleanForShare(String content) {
     return content
         .replaceAll(RegExp(r'\[SOURCE\](.*?)\[/SOURCE\]', dotAll: true), r'$1')
-        .trim();
-  }
-
-  /// Nettoie le texte avant synthèse vocale : retire les symboles isolés
-  /// ($, •, tirets, #, etc.) que la voix lirait lettre à lettre.
-  String _cleanForSpeech(String content) {
-    return content
-        .replaceAll(RegExp(r'\[SOURCE\](.*?)\[/SOURCE\]', dotAll: true), r'$1')
-        // Puces markdown (« • ») et caractères de liste
-        .replaceAll(RegExp(r'^\s*[•●◦]\s+', multiLine: true), '')
-        .replaceAll(RegExp(r'[•●◦]'), ' ')
-        // Montants en devise : ne garder que les chiffres (5 $ → 5)
-        .replaceAll(RegExp(r'[$€£¥]\s*(\d[\d\s.,]*)'), r'$1')
-        // Symboles isolés non parlés
-        .replaceAll(RegExp(r'[#%&^@|_~=]'), ' ')
-        // Tirets / points de suspension isolés
-        .replaceAll(RegExp(r'\s+[-—–]\s+'), ', ')
-        .replaceAll(RegExp(r'[-—–]+'), ' ')
-        // Emojis (lu·e·s par la voix sinon)
-        .replaceAll(RegExp(r'[\u{1F000}-\u{1FAFF}\u{2600}-\u{27BF}\u{FE0F}\u{2190}-\u{21FF}]', unicode: true), ' ')
-        // Espaces multiples
-        .replaceAll(RegExp(r'\s+'), ' ')
         .trim();
   }
 
