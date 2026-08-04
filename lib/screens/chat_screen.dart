@@ -90,9 +90,8 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
     _lastSpokenMessageId = last.id;
     AppLogger.info('ChatScreen', 'Réponse vocale déclenchée');
     _synthesizeResponse(chat, last);
-    // Le mode vocal est à usage unique : la réponse est lue une fois, puis
-    // on revient au chat normal pour ne pas rejouer chaque réponse ensuite.
-    if (mounted) setState(() => _voiceMode = false);
+    // NB : _voiceMode reste actif jusqu'à la fin de la synthèse pour que le
+    // texte ne s'affiche qu'une fois l'audio prêt (voir _synthesizeResponse).
   }
 
   /// Langue à utiliser pour la synthèse vocale d'un texte : 'ar' si le
@@ -141,6 +140,9 @@ class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
       AppLogger.warn('ChatScreen', 'TTS serveur échoué: $e');
     } finally {
       chat.setSynthesizing(false);
+      // La voix est prête (ou a échoué) : on rend la main au chat normal.
+      // Le texte et l'audio s'affichent ensemble à ce moment-là.
+      if (mounted) setState(() => _voiceMode = false);
     }
   }
 
