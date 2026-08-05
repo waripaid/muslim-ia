@@ -69,6 +69,8 @@
   "chatPreviewSubtitle": "Прослушайте перед отправкой",
   "chatNoTextDetected": "Текст не обнаружен",
   "chatTranscriptionError": "Ошибка транскрипции: {error}",
+  "chatVoiceTranscriptionLabel": "Аудиотранскрипция",
+  "chatPreparingVoice": "Подготовка голоса…",
   "authLogin": "Вход",
   "authLoginSubtitle": "Войдите, чтобы продолжить",
   "authRegister": "Регистрация",

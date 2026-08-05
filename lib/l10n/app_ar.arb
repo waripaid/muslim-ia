@@ -70,6 +70,8 @@
   "chatPreviewSubtitle": "استمع قبل الإرسال",
   "chatNoTextDetected": "لم يتم اكتشاف نص",
   "chatTranscriptionError": "خطأ في النسخ: {error}",
+  "chatVoiceTranscriptionLabel": "نسخ صوتي",
+  "chatPreparingVoice": "جارٍ تجهيز الصوت…",
 
   "authLogin": "تسجيل الدخول",
   "authLoginSubtitle": "سجّل الدخول للمتابعة",

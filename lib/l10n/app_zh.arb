@@ -69,6 +69,8 @@
   "chatPreviewSubtitle": "发送前试听",
   "chatNoTextDetected": "未检测到文本",
   "chatTranscriptionError": "转录错误：{error}",
+  "chatVoiceTranscriptionLabel": "音频转录",
+  "chatPreparingVoice": "正在准备语音…",
   "authLogin": "登录",
   "authLoginSubtitle": "登录以继续",
   "authRegister": "注册",

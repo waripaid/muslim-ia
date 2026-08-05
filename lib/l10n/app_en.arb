@@ -70,6 +70,8 @@
   "chatPreviewSubtitle": "Listen before sending",
   "chatNoTextDetected": "No text detected",
   "chatTranscriptionError": "Transcription error: {error}",
+  "chatVoiceTranscriptionLabel": "Audio transcription",
+  "chatPreparingVoice": "Preparing voice…",
 
   "authLogin": "Sign in",
   "authLoginSubtitle": "Sign in to continue",

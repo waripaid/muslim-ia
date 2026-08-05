@@ -522,15 +522,13 @@ abstract class AppLocalizations {
   /// **'Erreur de transcription: {error}'**
   String chatTranscriptionError(Object error);
 
-  /// Label affiché sur la bulle d'un message utilisateur issu d'une
-  /// transcription audio.
+  /// No description provided for @chatVoiceTranscriptionLabel.
   ///
   /// In fr, this message translates to:
   /// **'Transcription audio'**
   String get chatVoiceTranscriptionLabel;
 
-  /// Placeholder affiché dans la bulle de l'assistant pendant la génération
-  /// de la voix (le texte ne s'affiche qu'une fois l'audio prêt).
+  /// No description provided for @chatPreparingVoice.
   ///
   /// In fr, this message translates to:
   /// **'Préparation de la voix…'**

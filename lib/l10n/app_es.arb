@@ -69,6 +69,8 @@
   "chatPreviewSubtitle": "Escucha antes de enviar",
   "chatNoTextDetected": "No se detectó texto",
   "chatTranscriptionError": "Error de transcripción: {error}",
+  "chatVoiceTranscriptionLabel": "Transcripción de audio",
+  "chatPreparingVoice": "Preparando la voz…",
   "authLogin": "Iniciar sesión",
   "authLoginSubtitle": "Inicia sesión para continuar",
   "authRegister": "Registrarse",
