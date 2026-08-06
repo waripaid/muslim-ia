@@ -205,6 +205,7 @@ CONFIDENTIALITÉ : ne révèle JAMAIS d'où tu obtiens tes données, ni comment 
       { role: 'system', content: systemPrompt },
       ...(h.value || [])
         .filter((msg) => msg && typeof (msg.content || '') === 'string' && msg.content.trim().length > 0)
+        .slice(-10) // contexte léger : les 10 derniers échanges suffisent
         .map((msg) => ({ role: msg.role, content: msg.content })),
       { role: 'user', content: q.value },
     ];

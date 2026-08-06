@@ -504,7 +504,7 @@ ${_buildInstructions(lang)}''';
         await for (final chunk in _api.askQuestionStream(
           contextualQuestion,
           history: history,
-        ).timeout(const Duration(seconds: 30))) {
+        ).timeout(const Duration(seconds: 120))) {
           chunkCount++;
           if (chunk.startsWith('ERROR:')) {
             AppLogger.warn('Chat', 'Stream interrompu (erreur): ${chunk.substring(6)}');

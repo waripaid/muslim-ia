@@ -117,14 +117,18 @@ class ApiService {
         'history': history ?? [],
       });
 
-      // Timeout de connexion : si le serveur ne répond pas dans les 15 s,
-      // on abandonne au lieu de rester bloqué indéfiniment.
-      final response = await client.send(request).timeout(const Duration(seconds: 15));
+      // Timeout de connexion : 60 s pour couvrir le cold start de Render
+      // (~25-30 s) sans pénaliser les requêtes chaudes.
+      final response = await client.send(request).timeout(const Duration(seconds: 60));
       final stream = response.stream.transform(utf8.decoder);
 
       AppLogger.stream('API', 'Connexion stream établie (${response.statusCode})');
 
-      await for (final chunk in stream) {
+      // Détection de stall : si aucun octet n'arrive pendant 60 s (réseau
+      // coupé, serveur planté en cours de génération), on abandonne. Le
+      // timeout est réarmé à chaque chunk, donc une génération longue mais
+      // active n'est jamais coupée.
+      await for (final chunk in stream.timeout(const Duration(seconds: 60))) {
         for (final line in chunk.split('\n')) {
           if (line.startsWith('data: ') && !line.contains('[DONE]')) {
             final data = line.substring(6).trim();
@@ -168,7 +172,7 @@ class ApiService {
         'history': history ?? [],
         'userId': userId,
       }),
-    );
+    ).timeout(const Duration(seconds: 90));
 
     if (response.statusCode == 200) {
       return jsonDecode(response.body);

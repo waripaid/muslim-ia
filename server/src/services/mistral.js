@@ -131,33 +131,39 @@ async function callMistralAgent({ question, mode = 'general', history = [], user
   }
 
   try {
-    const response = await axios.post(
-      `${TRYIA_API_URL}/chat`,
-      {
-        messages,
-        mode,
-        user_id: userId,
-      },
-      {
-        headers: {
-          'Content-Type': 'application/json',
-          'X-API-Key': process.env.MISTRAL_API_KEY,
+    // Ne jamais attendre 3 s sur un endpoint TRYIA connu mort : on passe
+    // directement à Mistral (fallback). tryiaAvailable est maintenu par le
+    // health check et rafraîchi à chaque échec.
+    if (tryiaAvailable) {
+      const response = await axios.post(
+        `${TRYIA_API_URL}/chat`,
+        {
+          messages,
+          mode,
+          user_id: userId,
         },
-        timeout: 3000, // 3 secondes pour TRYIA, puis fallback
-        httpAgent: TRYIA_AGENT,
-      }
-    );
+        {
+          headers: {
+            'Content-Type': 'application/json',
+            'X-API-Key': process.env.MISTRAL_API_KEY,
+          },
+          timeout: 3000, // 3 secondes pour TRYIA, puis fallback
+          httpAgent: TRYIA_AGENT,
+        }
+      );
 
-    return {
-      answer: response.data.answer || response.data.content || response.data.message,
-      sources: response.data.sources?.length ? response.data.sources : sources,
-      usage: response.data.usage || {},
-      grounded: quranContext !== null,
-    };
+      return {
+        answer: response.data.answer || response.data.content || response.data.message,
+        sources: response.data.sources?.length ? response.data.sources : sources,
+        usage: response.data.usage || {},
+        grounded: quranContext !== null,
+      };
+    }
   } catch (error) {
     console.error('Erreur appel agent Mistral:', error.message);
-    return await callMistralDirect({ messages, mode, sources });
+    tryiaAvailable = false; // évite de réessayer un endpoint HS à chaque requête
   }
+  return await callMistralDirect({ messages, mode, sources });
 }
 
 /**
@@ -266,48 +272,71 @@ async function callMistralDirectStream({ messages, res }) {
   const finish = () => {
     if (finished) return;
     finished = true;
+    clearInterval(keepAlive);
     try {
       res.end();
     } catch (_) {}
   };
 
   let response;
-  try {
-    response = await axios.post(
-      MISTRAL_API_URL,
-      {
-        model: 'mistral-small-latest',
-        messages,
-        temperature: 0.7,
-        max_tokens: 4096,
-        stream: true,
-      },
-      {
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${process.env.MISTRAL_API_KEY}`,
+  // Une seule relance pour les erreurs transitoires (timeout réseau, 5xx,
+  // cold start du fournisseur) avant de remonter l'erreur au client.
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      response = await axios.post(
+        MISTRAL_API_URL,
+        {
+          model: 'mistral-small-latest',
+          messages,
+          temperature: 0.7,
+          max_tokens: 4096,
+          stream: true,
         },
-        timeout: 60000,
-        responseType: 'stream',
-        signal: controller.signal,
-        httpsAgent: MISTRAL_AGENT,
+        {
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${process.env.MISTRAL_API_KEY}`,
+          },
+          timeout: 60000,
+          responseType: 'stream',
+          signal: controller.signal,
+          httpsAgent: MISTRAL_AGENT,
+        }
+      );
+      break;
+    } catch (error) {
+      // Abort volontaire (client déconnecté) → ne rien envoyer.
+      if (error.name === 'CanceledError' || error.code === 'ERR_CANCELED' || controller.signal.aborted) {
+        try {
+          res.end();
+        } catch (_) {}
+        return;
       }
-    );
-  } catch (error) {
-    // Abort volontaire (client déconnecté) → ne rien envoyer.
-    if (error.name === 'CanceledError' || error.code === 'ERR_CANCELED' || controller.signal.aborted) {
+      const status = error.response?.status;
+      const transient = !status || status === 408 || status === 429 || status >= 500;
+      if (attempt === 0 && transient) {
+        console.error(`Stream setup error (retry ${attempt + 1}/2):`, error.message);
+        await new Promise((resolve) => setTimeout(resolve, 1000));
+        continue;
+      }
+      console.error('Stream setup error:', error.message);
       try {
+        res.write(`data: ${JSON.stringify({ error: error.message })}\n\n`);
         res.end();
       } catch (_) {}
       return;
     }
-    console.error('Stream setup error:', error.message);
-    try {
-      res.write(`data: ${JSON.stringify({ error: error.message })}\n\n`);
-      res.end();
-    } catch (_) {}
-    return;
   }
+
+  // Keep-alive SSE : envoie un commentaire toutes les 10 s pour empêcher les
+  // proxys/load-balancers de fermer la connexion pendant une génération longue.
+  const keepAlive = setInterval(() => {
+    if (!finished) {
+      try {
+        res.write(': ping\n\n');
+      } catch (_) {}
+    }
+  }, 10000);
 
   response.data.on('data', (chunk) => {
     buffer += chunk.toString();

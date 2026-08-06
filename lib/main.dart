@@ -914,12 +914,24 @@ class ChatShell extends StatefulWidget {
 
 class _ChatShellState extends State<ChatShell> {
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
+  Timer? _keepAliveTimer;
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) => _syncSubscription());
     context.read<SubscriptionProvider>().addListener(_syncSubscription);
+    // Garde le backend éveillé pendant que l'app est ouverte : un ping toutes
+    // les 5 min évite le cold start de Render (25-30 s) après une pause > 15 min.
+    _keepAliveTimer = Timer.periodic(const Duration(minutes: 5), (_) {
+      context.read<ApiService>().checkHealth().ignore();
+    });
+  }
+
+  @override
+  void dispose() {
+    _keepAliveTimer?.cancel();
+    super.dispose();
   }
 
   void _syncSubscription() {
