@@ -474,13 +474,22 @@ $confidentiality''';
       final history = _messages
           .sublist(0, _messages.length - 1)
           .where((m) => m.content.trim().isNotEmpty)
-          .map((m) => {'role': m.role == ChatRole.user ? 'user' : 'assistant', 'content': m.content})
+          .map((m) => {
+            'role': m.role == ChatRole.user ? 'user' : 'assistant',
+            // Chaque message d'historique est borné : la taille du prompt reste
+            // quasi constante même après 100 échanges → réponse toujours rapide.
+            'content': m.content.length > 600 ? m.content.substring(0, 600) : m.content,
+          })
           .toList();
 
       final lang = _userLanguage();
+      // Borne le message avant d'ajouter les instructions : très long message
+      // = premier token rapide, et les consignes (langue, format) survivent
+      // toujours à la troncature serveur.
+      final bounded = question.length > 2800 ? question.substring(0, 2800) : question;
       final contextualQuestion = '''[Réponds en $lang]
 
-$question
+$bounded
 
 ${_buildInstructions(lang)}''';
 
@@ -610,7 +619,10 @@ ${_buildInstructions(lang)}''';
 
     final history = _messages
         .where((m) => m.id != target.id && m.content.trim().isNotEmpty)
-        .map((m) => {'role': m.role == ChatRole.user ? 'user' : 'assistant', 'content': m.content})
+        .map((m) => {
+          'role': m.role == ChatRole.user ? 'user' : 'assistant',
+          'content': m.content.length > 600 ? m.content.substring(0, 600) : m.content,
+        })
         .toList();
 
     final buffer = StringBuffer(partial);
@@ -619,7 +631,7 @@ ${_buildInstructions(lang)}''';
       await for (final chunk in _api.askQuestionStream(
         continuePrompt,
         history: history,
-      ).timeout(const Duration(seconds: 30))) {
+      ).timeout(const Duration(seconds: 120))) {
         if (chunk.startsWith('ERROR:')) {
           AppLogger.warn('Chat', 'Erreur pendant la continuation: ${chunk.substring(6)}');
           stillIncomplete = true;

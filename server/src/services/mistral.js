@@ -167,25 +167,28 @@ async function callMistralAgent({ question, mode = 'general', history = [], user
 }
 
 /**
- * Récupère le contexte Quran via MCP
+ * Récupère le contexte Quran via MCP.
+ * Borné en temps (GROUNDING_BUDGET_MS) : si les sources MCP tardent, on rend la
+ * main sans contexte plutôt que de retarder la réponse — la rapidité prime.
  */
 async function fetchQuranContext(question) {
-  const refs = extractReferences(question);
+  const refs = extractReferences(question).slice(0, 3); // max 3 versets
   const results = [];
   const allSources = [];
+  const budgetMs = 4000;
+  const deadline = Date.now() + budgetMs;
 
-  // Si des références explicites sont trouvées
-  for (const ref of refs) {
+  const fetchVerse = async (ref) => {
+    if (Date.now() > deadline) return;
     try {
       const verseComplete = await fetchVerseComplete(ref);
       if (verseComplete) {
-        const source = {
+        allSources.push({
           sourate: ref.split(':')[0],
           verset: ref.split(':')[1],
           texte_arabe: verseComplete.arabe,
           traduction: verseComplete.traduction,
-        };
-        allSources.push(source);
+        });
         results.push(
           `📖 Sourate ${ref}:\n` +
           `Arabe: ${verseComplete.arabe}\n` +
@@ -196,6 +199,11 @@ async function fetchQuranContext(question) {
     } catch (e) {
       console.warn(`Erreur verset ${ref}:`, e.message);
     }
+  };
+
+  // Références explicites : en parallèle (au lieu de séquentiel) → latence réduite.
+  if (refs.length > 0) {
+    await Promise.all(refs.map(fetchVerse));
   }
 
   // Recherche thématique si pas de référence explicite
@@ -289,7 +297,7 @@ async function callMistralDirectStream({ messages, res }) {
           model: 'mistral-small-latest',
           messages,
           temperature: 0.7,
-          max_tokens: 4096,
+          max_tokens: 2048, // réponse complète plus rapide, amplement suffisant
           stream: true,
         },
         {

@@ -7,9 +7,10 @@ const DEFAULT_MAX = 5000;
 
 /**
  * Valide une chaîne optionnelle ou requise.
+ * @param {{ max?: number, name?: string, required?: boolean, truncate?: boolean }} opts
  * @returns {{ value?: string, error?: string }}
  */
-function str(value, { max = DEFAULT_MAX, name = 'champ', required = false } = {}) {
+function str(value, { max = DEFAULT_MAX, name = 'champ', required = false, truncate = false } = {}) {
   if (value === undefined || value === null || value === '') {
     if (required) return { error: `${name} requis` };
     return { value: undefined };
@@ -20,6 +21,9 @@ function str(value, { max = DEFAULT_MAX, name = 'champ', required = false } = {}
   const v = value.trim();
   if (required && v.length === 0) return { error: `${name} requis` };
   if (v.length > max) {
+    // Mode prod : on tronque au lieu de rejeter → jamais d'erreur 400 sur un
+    // message très long, et le prompt reste borné (premier token rapide).
+    if (truncate) return { value: v.slice(0, max) };
     return { error: `${name} trop long (maximum ${max} caractères)` };
   }
   return { value: v };

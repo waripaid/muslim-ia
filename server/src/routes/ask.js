@@ -19,10 +19,12 @@ router.post('/', async (req, res, next) => {
   try {
     const { question: rawQuestion, mode, history, userId } = req.body;
 
-    const q = str(rawQuestion, { max: 5000, name: 'question', required: true });
+    // max 3000 : on tronque les très longs messages au lieu de rejeter (jamais
+    // de 400 en prod) et le prompt reste léger → premier token rapide.
+    const q = str(rawQuestion, { max: 3000, name: 'question', required: true, truncate: true });
     if (q.error) return res.status(400).json({ error: q.error, success: false });
 
-    const h = arr(history, { max: 30, name: 'history' });
+    const h = arr(history, { max: 50, name: 'history' });
     if (h.error) return res.status(400).json({ error: h.error, success: false });
 
     const m = str(mode, { max: 30, name: 'mode' });
@@ -31,7 +33,7 @@ router.post('/', async (req, res, next) => {
     const result = await callMistralAgent({
       question: q.value,
       mode: m.value || 'general',
-      history: h.value || [],
+      history: (h.value || []).slice(-8),
       userId: u.value || null,
     });
 
@@ -193,10 +195,10 @@ router.post('/morphology', async (req, res, next) => {
  */
 router.post('/stream', async (req, res, next) => {
   try {
-    const q = str(req.body.question, { max: 5000, name: 'question', required: true });
+    const q = str(req.body.question, { max: 3000, name: 'question', required: true, truncate: true });
     if (q.error) return res.status(400).json({ error: q.error });
 
-    const h = arr(req.body.history, { max: 30, name: 'history' });
+    const h = arr(req.body.history, { max: 50, name: 'history' });
     if (h.error) return res.status(400).json({ error: h.error });
 
     const systemPrompt = `Tu es Muslim IA, assistant islamique. Réponds dans la langue de l'utilisateur. Cite les versets en arabe AVEC traduction. Sois précis.

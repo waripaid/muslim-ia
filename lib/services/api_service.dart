@@ -114,7 +114,9 @@ class ApiService {
       request.body = jsonEncode({
         'question': question,
         'mode': mode,
-        'history': history ?? [],
+        // Jamais plus que les 10 derniers échanges : le prompt reste léger et
+        // on reste sous la limite serveur même après 100 messages.
+        'history': (history ?? []).length > 10 ? history!.sublist(history.length - 10) : (history ?? []),
       });
 
       // Timeout de connexion : 60 s pour couvrir le cold start de Render
@@ -169,7 +171,7 @@ class ApiService {
       body: jsonEncode({
         'question': question,
         'mode': mode,
-        'history': history ?? [],
+        'history': (history ?? []).length > 10 ? history!.sublist(history.length - 10) : (history ?? []),
         'userId': userId,
       }),
     ).timeout(const Duration(seconds: 90));
