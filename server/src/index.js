@@ -64,6 +64,7 @@ if (cluster.isPrimary) {
   const visionRoutes = require('./routes/vision');
   const authRoutes = require('./routes/auth');
   const paymentsRoutes = require('./routes/payments');
+  const { handleWebhook } = require('./routes/payments');
 
   const app = express();
   const PORT = process.env.PORT || 4000;
@@ -86,6 +87,16 @@ if (cluster.isPrimary) {
   if (isDev) {
     app.use(morgan('dev'));
   }
+
+  // Le webhook GeniusPay doit être lu en BRUT (Buffer) pour vérifier la
+  // signature HMAC sur le payload exact. On le monte AVANT express.json()
+  // (qui parserait et reformaterait le JSON). Il répond toujours 200 à
+  // GeniusPay après vérification, même si le grant échoue (retry GeniusPay).
+  app.post(
+    '/api/payments/webhook',
+    express.raw({ type: 'application/json', limit: '2mb' }),
+    handleWebhook
+  );
 
   // Limites de corps : 10 Mo par défaut, appliquées avant tout traitement.
   app.use(express.json({ limit: '10mb' }));

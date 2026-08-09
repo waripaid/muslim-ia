@@ -343,6 +343,18 @@ class ApiService {
     ));
     return jsonDecode(response.body);
   }
+
+  /// Source de vérité serveur : état Premium actuel de l'utilisateur.
+  /// Appelé au démarrage / changement de compte pour que l'abonnement survie
+  /// à une réinstallation et à l'activation via webhook.
+  Future<Map<String, dynamic>> getEntitlement(String idToken) async {
+    final response = await _withRetry(() => http.post(
+      Uri.parse('$baseUrl/api/payments/entitlement'),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({'idToken': idToken}),
+    ));
+    return jsonDecode(response.body);
+  }
 }
 
 class ApiException implements Exception {

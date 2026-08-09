@@ -65,6 +65,11 @@ void main() async {
   await internetStatus.init();
   final authProvider = AuthProvider(storage: storageService, api: apiService);
   final chatProvider = ChatProvider(api: apiService, storage: storageService, internetStatus: internetStatus);
+  final subscriptionProvider = SubscriptionProvider(
+    storage: storageService,
+    api: apiService,
+    auth: authProvider,
+  );
 
   // Recharge les données de chat quand l'utilisateur change
   // (connexion, déconnexion, changement de compte) : quota et conversations
@@ -75,6 +80,9 @@ void main() async {
     if (currentUserId != lastSyncedUserId) {
       lastSyncedUserId = currentUserId;
       chatProvider.onUserChanged();
+      // Le Premium payé (webhook GeniusPay → Firebase) est ré-appliqué à
+      // chaque connexion : source de vérité serveur.
+      subscriptionProvider.syncEntitlement();
     }
   });
 
@@ -86,11 +94,7 @@ void main() async {
         ChangeNotifierProvider.value(value: authProvider),
         ChangeNotifierProvider(create: (_) => LanguageProvider(prefs: storageService.prefs)),
         ChangeNotifierProvider(create: (_) => MemoryProvider(storage: storageService)),
-        ChangeNotifierProvider(create: (_) => SubscriptionProvider(
-          storage: storageService,
-          api: apiService,
-          auth: authProvider,
-        )),
+        ChangeNotifierProvider.value(value: subscriptionProvider),
         ChangeNotifierProvider.value(value: chatProvider),
         Provider.value(value: apiService),
         Provider.value(value: storageService),

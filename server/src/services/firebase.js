@@ -198,6 +198,78 @@ async function saveFcmToken(userId, fcmToken) {
   return { success: true };
 }
 
+// ── PAIEMENTS & ABONNEMENT ────────────────────────────────────
+
+/**
+ * Enregistre (ou met à jour) un paiement. Le doc id est la référence
+ * GeniusPay → l'écriture est naturellement idempotente (pas de double grant).
+ */
+async function recordPayment(reference, data) {
+  if (!isFirebaseAvailable()) return { success: true };
+  const db = getDb();
+  await db.collection('payments').doc(reference).set(
+    { ...data, updated_at: admin.firestore.FieldValue.serverTimestamp() },
+    { merge: true }
+  );
+  return { success: true };
+}
+
+async function getPaymentRecord(reference) {
+  if (!isFirebaseAvailable()) return null;
+  const db = getDb();
+  const doc = await db.collection('payments').doc(reference).get();
+  return doc.exists ? doc.data() : null;
+}
+
+/**
+ * Active (ou prolonge) l'abonnement Premium d'un utilisateur.
+ */
+async function setSubscription(userId, { plan = 'premium', premiumEnd, reference = null } = {}) {
+  if (!isFirebaseAvailable()) return { success: true };
+  const db = getDb();
+  await db.collection('users').doc(userId).set(
+    {
+      subscription: {
+        plan,
+        premium_end: premiumEnd instanceof Date ? premiumEnd.toISOString() : premiumEnd,
+        source: 'geniuspay',
+        reference,
+        activated_at: admin.firestore.FieldValue.serverTimestamp(),
+      },
+    },
+    { merge: true }
+  );
+  return { success: true };
+}
+
+/**
+ * Récupère l'abonnement d'un utilisateur (null si aucun).
+ */
+async function getSubscription(userId) {
+  if (!isFirebaseAvailable()) return null;
+  const db = getDb();
+  const doc = await db.collection('users').doc(userId).get();
+  return doc.exists ? doc.data()?.subscription || null : null;
+}
+
+/**
+ * Révoque l'abonnement (remboursement / expiration) en reculant la fin.
+ */
+async function revokeSubscription(userId) {
+  if (!isFirebaseAvailable()) return { success: true };
+  const db = getDb();
+  await db.collection('users').doc(userId).set(
+    {
+      subscription: {
+        revoked: true,
+        revoked_at: admin.firestore.FieldValue.serverTimestamp(),
+      },
+    },
+    { merge: true }
+  );
+  return { success: true };
+}
+
 module.exports = {
   isFirebaseAvailable,
   getAuth,
@@ -212,4 +284,9 @@ module.exports = {
   upsertUser,
   sendPushNotification,
   saveFcmToken,
+  recordPayment,
+  getPaymentRecord,
+  setSubscription,
+  getSubscription,
+  revokeSubscription,
 };

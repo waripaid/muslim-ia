@@ -1,6 +1,7 @@
 const express = require('express');
+const crypto = require('crypto');
 const router = express.Router();
-const { getAuth, isFirebaseAvailable } = require('../services/firebase');
+const { getAuth, isFirebaseAvailable, recordPayment, getPaymentRecord, setSubscription, getSubscription, revokeSubscription } = require('../services/firebase');
 const geniuspay = require('../services/geniuspay');
 const { str } = require('../utils/validate');
 const logger = require('../utils/logger');
@@ -11,6 +12,8 @@ const ERROR_URL =
   process.env.PAYMENT_ERROR_URL || 'https://muslim-ia.web.app/payment/error';
 
 const PREMIUM_DAYS = 30;
+// Tolérance anti-rejeu : un webhook plus vieux que 5 min est ignoré.
+const MAX_WEBHOOK_AGE_SEC = 300;
 
 /**
  * Vérifie l'idToken Firebase et retourne le décodage.
@@ -79,6 +82,18 @@ router.post('/checkout', async (req, res, next) => {
 
     logger.success('Payments', `checkout créé reference=${payment.reference} status=${payment.status} env=${payment.environment}`);
 
+    // Trace l'intention de paiement côté serveur (pour réconciliation webhook).
+    recordPayment(payment.reference, {
+      uid: decoded.uid,
+      email: email.value,
+      amount: Number(payment.amount ?? amount),
+      currency: payment.currency || 'XOF',
+      status: payment.status || 'pending',
+      environment: payment.environment || 'sandbox',
+      product: 'premium',
+      created_at: new Date().toISOString(),
+    }).catch((e) => logger.warn('Payments', `Enregistrement checkout Firebase impossible: ${e.message}`));
+
     res.json({
       success: true,
       data: {
@@ -138,4 +153,178 @@ router.post('/status', async (req, res, next) => {
   }
 });
 
+/**
+ * POST /api/payments/webhook
+ * Webhook GeniusPay (corps brut + HMAC-SHA256). Ce endpoint est monté dans
+ * index.js AVEC express.raw() pour conserver les octets exacts de la
+ * signature. Sert de source de vérité : quand GeniusPay notifie payment.success,
+ * on vérifie la signature, on confirme auprès de l'API puis on active le
+ * Premium côté serveur (Firebase) — l'app n'a plus qu'à lire cet état.
+ *
+ * Headers attendus :
+ *   X-Webhook-Signature : HMAC-SHA256(timestamp + "." + payload_brut, whsec)
+ *   X-Webhook-Timestamp : timestamp Unix
+ *   X-Webhook-Event     : payment.success | failed | cancelled | expired | refunded
+ */
+async function handleWebhook(req, res) {
+  // --- Vérification de la signature HMAC ---
+  const signature = (req.headers['x-webhook-signature'] || '').trim();
+  const timestamp = Number(req.headers['x-webhook-timestamp'] || 0);
+  const event = req.headers['x-webhook-event'] || '';
+
+  if (!process.env.GENIUSPAY_WEBHOOK_SECRET) {
+    logger.warn('Payments', 'Webhook reçu mais GENIUSPAY_WEBHOOK_SECRET non configuré');
+    return res.status(503).json({ success: false, error: 'Webhook non configuré' });
+  }
+  if (!signature || !timestamp) {
+    return res.status(401).json({ success: false, error: 'Signature manquante' });
+  }
+
+  const rawBody = Buffer.isBuffer(req.body) ? req.body.toString('utf8') : String(req.body || '');
+  let payload = null;
+  try {
+    payload = JSON.parse(rawBody);
+  } catch {
+    return res.status(400).json({ success: false, error: 'JSON invalide' });
+  }
+
+  // Le payload exact est signé. On accepte aussi la forme re-sérialisée
+  // (certains SDK re-encode le payload) — jamais d'échec lié à l'encodage.
+  const candidates = [rawBody, JSON.stringify(payload)];
+  const expectedList = candidates.map((body) =>
+    crypto.createHmac('sha256', process.env.GENIUSPAY_WEBHOOK_SECRET)
+      .update(`${timestamp}.${body}`)
+      .digest('hex')
+  );
+  const sigBuf = Buffer.from(signature, 'utf8');
+  const valid = expectedList.some((expected) => {
+    const expBuf = Buffer.from(expected, 'utf8');
+    return expBuf.length === sigBuf.length && crypto.timingSafeEqual(expBuf, sigBuf);
+  });
+  if (!valid) {
+    logger.warn('Payments', 'Webhook REJETÉ (signature invalide)');
+    return res.status(401).json({ success: false, error: 'Signature invalide' });
+  }
+
+  // Anti-rejeu : timestamp trop ancien (ou dans le futur) → ignoré.
+  const nowSec = Math.floor(Date.now() / 1000);
+  if (Math.abs(nowSec - timestamp) > MAX_WEBHOOK_AGE_SEC) {
+    logger.warn('Payments', `Webhook rejeté (timestamp ${timestamp}, maintenant ${nowSec})`);
+    return res.status(400).json({ success: false, error: 'Timestamp expiré' });
+  }
+
+  // --- Traitement de l'événement ---
+  const data = payload.data || {};
+  const reference = data.reference;
+  const status = String(data.status || '').toLowerCase();
+  const meta = data.metadata || payload.metadata || {};
+  const uid = meta.uid || data.uid || null;
+  const environment = payload.environment || 'unknown';
+
+  logger.info('Payments', `Webhook valide event=${event || payload.event} ref=${reference} status=${status} uid=${uid} env=${environment}`);
+
+  if (!reference) {
+    logger.warn('Payments', 'Webhook sans référence, ignoré');
+    return res.status(200).json({ success: true, received: true });
+  }
+
+  try {
+    if (event === 'payment.success' || payload.event === 'payment.success') {
+      // Confirmation secondaire auprès de l'API GeniusPay avant d'accorder quoi
+      // que ce soit (le webhook seul ne suffit jamais en sécurité).
+      let confirmed = false;
+      try {
+        const gp = await geniuspay.getPayment(reference);
+        confirmed = ['completed', 'succeeded'].includes(String(gp.status).toLowerCase());
+      } catch (e) {
+        logger.warn('Payments', `Confirmation API GeniusPay indisponible pour ${reference}: ${e.message}`);
+      }
+
+      await recordPayment(reference, {
+        uid,
+        event,
+        status: confirmed ? 'completed' : status,
+        environment,
+        received_at: new Date().toISOString(),
+      });
+
+      if (!confirmed) {
+        logger.warn('Payments', `Réf ${reference} : non confirmée "completed" côté API, grant annulé`);
+        return res.status(200).json({ success: true, received: true, granted: false });
+      }
+      if (!uid) {
+        logger.warn('Payments', `Réf ${reference} payée mais sans uid (métadonnées absentes), pas de grant possible`);
+        return res.status(200).json({ success: true, received: true, granted: false });
+      }
+
+      // Idempotence : un paiement déjà traité comme complété n'est pas re-granté.
+      const existing = await getPaymentRecord(reference);
+      if (existing?.granted_at) {
+        logger.info('Payments', `Réf ${reference} déjà accordée le ${existing.granted_at}, doublon ignoré`);
+        return res.status(200).json({ success: true, received: true, granted: false, duplicate: true });
+      }
+
+      const premiumEnd = new Date(Date.now() + PREMIUM_DAYS * 24 * 60 * 60 * 1000);
+      await setSubscription(uid, { plan: 'premium', premiumEnd, reference });
+      await recordPayment(reference, {
+        granted_at: new Date().toISOString(),
+        premium_end: premiumEnd.toISOString(),
+      });
+      logger.success('Payments', `PREMIUM ACTIVÉ pour uid=${uid} (réf ${reference}) jusqu'au ${premiumEnd.toISOString()}`);
+      return res.status(200).json({ success: true, received: true, granted: true });
+    }
+
+    // Échec / annulation / expiration / remboursement
+    await recordPayment(reference, {
+      uid,
+      event,
+      status,
+      environment,
+      received_at: new Date().toISOString(),
+    });
+
+    if (event === 'payment.refunded' || payload.event === 'payment.refunded') {
+      if (uid) {
+        await revokeSubscription(uid);
+        logger.warn('Payments', `Abonnement révoqué (remboursement) pour uid=${uid} (réf ${reference})`);
+      }
+    }
+
+    return res.status(200).json({ success: true, received: true });
+  } catch (e) {
+    logger.error('Payments', 'Erreur traitement webhook', e);
+    return res.status(500).json({ success: false, error: 'Erreur interne' });
+  }
+}
+
+/**
+ * POST /api/payments/entitlement
+ * Source de vérité serveur : retourne l'abonnement Premium de l'utilisateur.
+ * L'app l'interroge au démarrage / au changement de compte → le Premium survit
+ * à la réinstallation et ne dépend plus du stockage local.
+ * Body: { idToken }
+ */
+router.post('/entitlement', async (req, res, next) => {
+  try {
+    const decoded = await verifyToken(req.body?.idToken);
+    const sub = await getSubscription(decoded.uid);
+
+    let isPremium = false;
+    let premiumEnd = null;
+    if (sub && !sub.revoked && sub.premium_end) {
+      const end = new Date(sub.premium_end);
+      isPremium = end.getTime() > Date.now();
+      premiumEnd = end.toISOString();
+    }
+
+    res.json({
+      success: true,
+      data: { isPremium, premiumEnd, plan: sub?.plan || null, source: sub?.source || null },
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
 module.exports = router;
+module.exports.handleWebhook = handleWebhook;

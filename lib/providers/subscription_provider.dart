@@ -259,6 +259,34 @@ class SubscriptionProvider extends ChangeNotifier {
     return false;
   }
 
+  /// Synchronise l'abonnement avec la source de vérité serveur (Firebase,
+  /// alimentée par le webhook GeniusPay). Appelé au démarrage / changement de
+  /// compte : un utilisateur payé garde son Premium même après réinstallation.
+  Future<void> syncEntitlement() async {
+    try {
+      final idToken = await _auth.getIdToken();
+      if (idToken == null) return;
+      AppLogger.info('Sub', 'Sync entitlement serveur...');
+      final res = await _api.getEntitlement(idToken);
+      final data = res['data'] as Map<String, dynamic>?;
+      final serverPremium = data?['isPremium'] == true;
+      final serverEnd = data?['premiumEnd'] != null
+          ? DateTime.tryParse(data!['premiumEnd'].toString())
+          : null;
+
+      if (serverPremium && serverEnd != null) {
+        AppLogger.success('Sub', 'Premium serveur confirmé jusqu\'au $serverEnd');
+        _isSubscribed = true;
+        _subscriptionEnd = serverEnd;
+        _trialActive = false;
+        _save();
+        notifyListeners();
+      }
+    } catch (e) {
+      AppLogger.warn('Sub', 'Sync entitlement indisponible: $e');
+    }
+  }
+
   void _save() {
     _storage.prefs.setString(_key, jsonEncode({
       'subscribed': _isSubscribed,
