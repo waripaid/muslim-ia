@@ -240,38 +240,28 @@ async function handleWebhook(req, res) {
         logger.warn('Payments', `Confirmation API GeniusPay indisponible pour ${reference}: ${e.message}`);
       }
 
+      if (!confirmed) {
+        logger.warn('Payments', `Réf ${reference} : non confirmée "completed" côté API, acquittement uniquement`);
+        await recordPayment(reference, {
+          uid,
+          event,
+          status,
+          environment,
+          received_at: new Date().toISOString(),
+        });
+        return res.status(200).json({ success: true, received: true, granted: false });
+      }
+
+      // App désormais gratuite : aucun grant Premium n'est effectué.
       await recordPayment(reference, {
         uid,
         event,
-        status: confirmed ? 'completed' : status,
+        status: 'completed',
         environment,
         received_at: new Date().toISOString(),
       });
-
-      if (!confirmed) {
-        logger.warn('Payments', `Réf ${reference} : non confirmée "completed" côté API, grant annulé`);
-        return res.status(200).json({ success: true, received: true, granted: false });
-      }
-      if (!uid) {
-        logger.warn('Payments', `Réf ${reference} payée mais sans uid (métadonnées absentes), pas de grant possible`);
-        return res.status(200).json({ success: true, received: true, granted: false });
-      }
-
-      // Idempotence : un paiement déjà traité comme complété n'est pas re-granté.
-      const existing = await getPaymentRecord(reference);
-      if (existing?.granted_at) {
-        logger.info('Payments', `Réf ${reference} déjà accordée le ${existing.granted_at}, doublon ignoré`);
-        return res.status(200).json({ success: true, received: true, granted: false, duplicate: true });
-      }
-
-      const premiumEnd = new Date(Date.now() + PREMIUM_DAYS * 24 * 60 * 60 * 1000);
-      await setSubscription(uid, { plan: 'premium', premiumEnd, reference });
-      await recordPayment(reference, {
-        granted_at: new Date().toISOString(),
-        premium_end: premiumEnd.toISOString(),
-      });
-      logger.success('Payments', `PREMIUM ACTIVÉ pour uid=${uid} (réf ${reference}) jusqu'au ${premiumEnd.toISOString()}`);
-      return res.status(200).json({ success: true, received: true, granted: true });
+      logger.info('Payments', `Paiement confirmé (${reference}) — aucun abonnement accordé (app gratuite)`);
+      return res.status(200).json({ success: true, received: true, granted: false, free: true });
     }
 
     // Échec / annulation / expiration / remboursement
@@ -285,8 +275,10 @@ async function handleWebhook(req, res) {
 
     if (event === 'payment.refunded' || payload.event === 'payment.refunded') {
       if (uid) {
-        await revokeSubscription(uid);
-        logger.warn('Payments', `Abonnement révoqué (remboursement) pour uid=${uid} (réf ${reference})`);
+        try {
+          await revokeSubscription(uid);
+        } catch {}
+        logger.warn('Payments', `Remboursement reçu (réf ${reference}) — aucune action d'abonnement requise (app gratuite)`);
       }
     }
 

@@ -32,11 +32,11 @@ class SubscriptionProvider extends ChangeNotifier {
     _load();
   }
 
-  bool get isSubscribed => _isSubscribed || _trialActive;
-  bool get isPremium => _isSubscribed || isAdminEmail(_auth.email);
-  bool get trialActive => _trialActive;
-  int get themeChangesLeft => 3 - _themeChanges;
-  bool get canChangeTheme => _isSubscribed || _trialActive || _themeChanges < 3;
+  bool get isSubscribed => false;
+  bool get isPremium => true;
+  bool get trialActive => false;
+  int get themeChangesLeft => 9999;
+  bool get canChangeTheme => true;
   bool get isProcessing => _isProcessing;
   String? get paymentReference => _paymentReference;
   DateTime? get subscriptionEnd => _subscriptionEnd;
@@ -227,14 +227,13 @@ class SubscriptionProvider extends ChangeNotifier {
         AppLogger.info('Sub', 'Réponse tentative ${attempt + 1}: status=$status, gateway=${data['gateway'] ?? 'null'}, completed_at=${data['completed_at'] ?? 'null'}');
 
         if (status == 'completed' || status == 'succeeded') {
-          AppLogger.success('Sub', 'PAIEMENT COMPLÉTÉ ✅ — activation de l\'abonnement (30 jours)');
-          _isSubscribed = true;
-          _subscriptionEnd = DateTime.now().add(const Duration(days: 30));
+          AppLogger.success('Sub', 'Paiement reçu (app gratuite) — aucune activation d\'abonnement');
+          _isSubscribed = false;
+          _subscriptionEnd = null;
           _trialActive = false;
           _isProcessing = false;
           _save();
           notifyListeners();
-          AppLogger.success('Sub', 'Abonnement activé jusqu\'au ${_subscriptionEnd!.toIso8601String()}');
           return true;
         }
 
@@ -274,10 +273,10 @@ class SubscriptionProvider extends ChangeNotifier {
           ? DateTime.tryParse(data!['premiumEnd'].toString())
           : null;
 
-      if (serverPremium && serverEnd != null) {
-        AppLogger.success('Sub', 'Premium serveur confirmé jusqu\'au $serverEnd');
-        _isSubscribed = true;
-        _subscriptionEnd = serverEnd;
+      // App gratuite pour tous : supprimer tout statut d'abonnement
+      if (_isSubscribed || _subscriptionEnd != null || _trialActive) {
+        _isSubscribed = false;
+        _subscriptionEnd = null;
         _trialActive = false;
         _save();
         notifyListeners();
