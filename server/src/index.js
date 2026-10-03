@@ -70,9 +70,9 @@ if (cluster.isPrimary) {
   const PORT = process.env.PORT || 4000;
 
   const windowMs = parseInt(process.env.RATE_LIMIT_WINDOW_MS || '60000', 10);
-  const generalMax = parseInt(process.env.RATE_LIMIT_MAX || '120', 10);
-  const strictMax = parseInt(process.env.RATE_LIMIT_STRICT_MAX || '20', 10);
-  const heavyMax = parseInt(process.env.RATE_LIMIT_HEAVY_MAX || '30', 10);
+  const generalMax = parseInt(process.env.RATE_LIMIT_MAX || '180', 10);
+  const strictMax = parseInt(process.env.RATE_LIMIT_STRICT_MAX || '60', 10);
+  const heavyMax = parseInt(process.env.RATE_LIMIT_HEAVY_MAX || '40', 10);
 
   // Derrière un proxy / load balancer (Cloud Run, Nginx, GCP...).
   if (process.env.TRUST_PROXY === 'true') app.set('trust proxy', 1);
